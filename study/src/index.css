@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optionnel : Appliquer le thème parchemin par défaut sur tout le site */
+body {
+  @apply bg-parchemin text-charbon font-sans;
+  margin: 0;
+  padding: 0;
+}
