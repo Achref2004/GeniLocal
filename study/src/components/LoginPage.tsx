@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'; // Vérifie bien l'import de useEffect ici
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Button } from './ui/button';
@@ -24,6 +24,7 @@ export function LoginPage() {
       localStorage.setItem('token', token);
       try {
         const decoded: any = jwtDecode(token);
+        // On redirige selon le rôle stocké dans le JWT
         if (decoded.is_admin) {
           navigate('/admin');
         } else {
@@ -175,7 +176,7 @@ export function LoginPage() {
                   <Label htmlFor="password" className="text-[#4a524c] font-serif">Mot de passe</Label>
                   <button 
                     type="button" 
-                    onClick={() => navigate('/forgot-password')} // Pense à créer cette route !
+                    onClick={() => navigate('/forgot-password')}
                     className="text-xs text-[#cdaa6a] hover:text-[#b5955c] font-medium"
                   >
                     Oublié ?
