@@ -18,6 +18,7 @@ export function SignUpPage() {
     email: '',
     password: '',
     confirmPassword: '',
+    region: '',
   });
 
   // Correction : Ajout du type pour l'événement de saisie
@@ -43,6 +44,7 @@ export function SignUpPage() {
         username: `${formData.firstName} ${formData.lastName}`,
         email: formData.email,
         password: formData.password,
+        region: formData.region,
       });
 
       alert("Votre signature a été apposée au registre !");
@@ -149,13 +151,26 @@ export function SignUpPage() {
 
               <div className="space-y-1">
                 <Label className="text-xs font-serif text-[#4a524c]">Courriel</Label>
-                <Input 
-                  name="email" 
-                  type="email" 
-                  value={formData.email} 
-                  onChange={handleChange} 
+                <Input
+                  name="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={handleChange}
                   required
-                  className="bg-[#eae4d3]/50 border-[#d1cab5]" 
+                  className="bg-[#eae4d3]/50 border-[#d1cab5]"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-serif text-[#4a524c]">Région *</Label>
+                <Input
+                  name="region"
+                  type="text"
+                  value={formData.region}
+                  onChange={handleChange}
+                  required
+                  placeholder="Ex: Tunisie, France, Maroc..."
+                  className="bg-[#eae4d3]/50 border-[#d1cab5]"
                 />
               </div>
 

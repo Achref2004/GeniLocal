@@ -19,6 +19,7 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     birthdate = Column(String(50), nullable=True) # Gardé en String pour plus de flexibilité avec le front-end
     institution = Column(String(255), nullable=True)
+    region = Column(String(100), nullable=True)  # Région/Pays
     level = Column(String(50), default="Licence 3")
     objective = Column(Text, nullable=True)
 

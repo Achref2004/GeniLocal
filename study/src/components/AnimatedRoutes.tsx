@@ -3,12 +3,12 @@ import { AnimatePresence } from 'framer-motion';
 import { BookCover } from './BookCover';
 import { LoginPage } from './LoginPage';
 import { SignUpPage } from './SignUpPage';
-import { AdminDashboard } from './AdminDashboard'; 
-import ForgotPassword from './ForgotPassword'; 
-import ResetPassword from './ResetPassword'; 
+import { AdminDashboard } from './AdminDashboard';
+import { StatisticsPage } from './StatisticsPage';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
-import Librairie from './Librairie';
 export function AnimatedRoutes() {
   const location = useLocation();
 
@@ -21,8 +21,8 @@ export function AnimatedRoutes() {
           <Route path="/signup" element={<SignUpPage />} />
           
           {/* espace Admin */}
-          <Route path="/librairie" element={<Librairie />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/statistics" element={<StatisticsPage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<Dashboard />} />

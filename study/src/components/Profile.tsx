@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import {
     User, Mail, Phone, Calendar, School, Target,
-    GraduationCap, Camera, Star, Save, Sparkles, CheckCircle2,
+    GraduationCap, Camera, Star, Save, Sparkles, CheckCircle2, Globe,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../reutilisable/Themecontext';
@@ -39,7 +39,7 @@ const Profile: React.FC = () => {
     const [error, setError] = useState('');
     const [formData, setFormData] = useState({
         fullname: '', email: '', phone: '',
-        birthdate: '', institution: '', level: 'Licence 3', objective: '',
+        birthdate: '', institution: '', region: '', level: 'Licence 3', objective: '',
     });
 
     useEffect(() => {
@@ -344,6 +344,7 @@ const Profile: React.FC = () => {
 
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                                 {field('Institution', <School size={13} />, 'institution')}
+                                {field('Région', <Globe size={13} />, 'region')}
 
                                 {/* Level select */}
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

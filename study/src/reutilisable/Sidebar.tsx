@@ -33,10 +33,8 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-    { id: 'librairie', icon: <BookOpen size={22} />, title: 'Librairie', subtitle: 'Espace de travail' },
     { id: 'resume', icon: <Sparkles size={22} />, title: 'Résumé', subtitle: 'Aperçu & suivi' },
     { id: 'profil', icon: <User size={22} />, title: 'Profil', subtitle: 'Vos paramètres' },
-    { id: 'psy', icon: <Brain size={22} />, title: 'Psy', subtitle: 'Bien-être mental' },
     { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation' },
 ];
 
@@ -125,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 title={title}
                                 onClick={() => {
                                     if (id === 'profil') navigate('/profile');
-                                    else if (id === 'librairie') navigate('/librairie');
+
                                     else setActiveTab(id);
                                 }}
                                 style={{

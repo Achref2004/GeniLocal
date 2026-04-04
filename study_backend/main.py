@@ -6,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from authlib.integrations.starlette_client import OAuth
 import models, schemas, auth
 from database import engine, get_db
-from auth import get_current_user, get_current_admin 
-from typing import List
+from auth import get_current_user, get_current_admin
+from typing import List, Dict
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
@@ -55,9 +55,10 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
         
         hashed_pwd = auth.hash_password(user.password)
         new_user = models.User(
-            username=user.username, 
-            email=user.email, 
-            hashed_password=hashed_pwd
+            username=user.username,
+            email=user.email,
+            hashed_password=hashed_pwd,
+            region=user.region
         )
         db.add(new_user)
         db.flush() 
@@ -191,16 +192,320 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
 
     reset_token = auth.create_access_token(data={"sub": user.email})
     link = f"http://localhost:5173/reset-password?token={reset_token}"
+
+    # Créer un template HTML 
+    username = user.fullname or user.username or "Utilisateur"
+
+    html_body = f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                margin: 0;
+                padding: 20px;
+                font-family: 'Georgia', 'Playfair Display', serif;
+                background: #f5f5f5;
+            }}
+            .wrapper {{
+                max-width: 520px;
+                margin: 0 auto;
+            }}
+            .card {{
+                background: linear-gradient(135deg, #1a2845 0%, #0f1419 100%);
+                position: relative;
+                padding: 50px 40px;
+                text-align: center;
+                border-radius: 8px;
+                border: 4px solid #c0c0c0;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            }}
+            .card-content {{
+                position: relative;
+                z-index: 1;
+            }}
+            .logo {{
+                font-size: 36px;
+                font-weight: bold;
+                margin-bottom: 20px;
+                letter-spacing: 2px;
+                color: #e8d5b7;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
+            }}
+            .greeting {{
+                font-size: 26px;
+                font-weight: normal;
+                margin-bottom: 10px;
+                letter-spacing: 0.5px;
+                color: #c0c0c0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
+            }}
+            .user-name {{
+                font-size: 38px;
+                font-weight: bold;
+                margin-bottom: 30px;
+                color: #e8d5b7;
+                text-shadow: 3px 3px 6px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.6);
+                font-family: 'Playfair Display', Georgia, serif;
+            }}
+            .message {{
+                color: #e0e0e0;
+                font-size: 14px;
+                line-height: 1.8;
+                margin: 20px 0;
+                font-family: 'Georgia', serif;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .button {{
+                display: inline-block;
+                background: linear-gradient(135deg, #1a3456 0%, #0d1b2a 100%);
+                color: white;
+                padding: 14px 45px;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 700;
+                font-size: 15px;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                box-shadow: 0 4px 15px rgba(26, 52, 86, 0.6);
+                transition: all 0.3s ease;
+                margin: 30px 0;
+            }}
+            .button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(26, 52, 86, 0.8);
+                background: linear-gradient(135deg, #2a4a70 0%, #1a3456 100%);
+            }}
+            .security-note {{
+                font-size: 12px;
+                color: #b0b0b0;
+                margin-top: 20px;
+                font-family: 'Georgia', serif;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 40px;
+                color: #e8d5b7;
+                font-size: 12px;
+                font-family: 'Georgia', serif;
+                letter-spacing: 0.5px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .ticket-divider {{
+                border-top: 2px dashed #c0c0c0;
+                margin: 40px 0;
+                opacity: 0.6;
+            }}
+            .ticket-footer {{
+                text-align: center;
+                color: #c0c0c0;
+                font-size: 11px;
+                font-family: 'Georgia', serif;
+                line-height: 1.8;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+                margin-top: 30px;
+                padding-top: 20px;
+            }}
+            .ticket-footer .copyright {{
+                color: #a0a0a0;
+                font-size: 10px;
+                margin-bottom: 10px;
+            }}
+            .ticket-footer .author {{
+                color: #a0a0a0;
+                font-size: 10px;
+                margin-bottom: 15px;
+            }}
+            .ticket-footer .message {{
+                color: #e8d5b7;
+                font-size: 12px;
+                font-weight: bold;
+                letter-spacing: 0.5px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+            <div class="card">
+                <div class="card-content">
+                    <!-- Logo -->
+                    <div class="logo"> Study yee m3lem</div>
+
+                    <!-- Greeting with user name -->
+                    <div class="greeting">Bienvenue</div>
+                    <div class="user-name">{username}</div>
+
+                    <!-- Message -->
+                    <p class="message">
+                        Nous avons reçu une demande de réinitialisation<br>
+                        de votre mot de passe.
+                    </p>
+
+                    <!-- Reset button -->
+                    <a href="{link}" class="button"> Réinitialiser</a>
+
+                    <!-- Security note -->
+                    <p class="security-note"> Ce lien expirera dans 1 heure</p>
+
+                    <!-- Ticket divider -->
+                    <div class="ticket-divider"></div>
+
+                    <!-- Ticket footer -->
+                    <div class="ticket-footer">
+                        <div class="copyright">© 2026 Study - Tous droits réservés</div>
+                        <div class="author">Créé par Achref Jnayeh</div>
+                        <div class="message">✨ Bonne chance champione dans vos apprentissages! ✨</div>
+                    </div>
+
+                    <!-- Main footer -->
+                    <div class="footer">
+                        © 2026 Study
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
     message = MessageSchema(
-        subject="Réinitialisation de ton mot de passe Study 📚",
+        subject="🔐 Réinitialisation de votre mot de passe Study",
         recipients=[user.email],
-        body=f"Clique ici : {link}",
+        body=html_body,
         subtype=MessageType.html
     )
     fm = FastMail(conf)
     await fm.send_message(message)
     return {"message": "Email envoyé !"}
 
-@app.get("/admin/users", response_model=List[schemas.UserOut])
+@app.post("/reset-password")
+def reset_password(reset_data: schemas.ResetPasswordUpdate, db: Session = Depends(get_db)):
+    # Vérifier que le token est valide
+    payload = auth.verify_token(reset_data.token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Le lien est invalide ou a expiré.")
+
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(status_code=400, detail="Token invalide.")
+
+    # Chercher l'utilisateur
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # Mettre à jour le mot de passe
+    user.hashed_password = auth.hash_password(reset_data.new_password)
+    db.commit()
+
+    return {"message": "Mot de passe réinitialisé avec succès !"}
+
+@app.get("/admin/users", response_model=List[schemas.UserOutAdmin])
 def get_admin_users(db: Session = Depends(get_db), current_admin: models.User = Depends(get_current_admin)):
-    return db.query(models.User).all()
+    """Récupère la liste de tous les utilisateurs (sauf les admins)"""
+    return db.query(models.User).filter(models.User.is_admin == False).all()
+
+@app.post("/admin/users", response_model=schemas.UserOutAdmin, status_code=status.HTTP_201_CREATED)
+def admin_create_user(
+    user_data: schemas.AdminCreateUser,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    """L'admin crée un nouvel utilisateur"""
+    # Vérifier que l'email n'existe pas déjà
+    existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+
+    # Créer le nouvel utilisateur
+    hashed_pwd = auth.hash_password(user_data.password)
+    new_user = models.User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_pwd,
+        fullname=user_data.fullname,
+        institution=user_data.institution,
+        region=user_data.region,
+        is_admin=user_data.is_admin
+    )
+    db.add(new_user)
+    db.flush()
+
+    # Créer les stats pour le nouvel utilisateur
+    new_stats = models.UserStats(user_id=new_user.id)
+    db.add(new_stats)
+
+    db.commit()
+    db.refresh(new_user)
+    return new_user
+
+@app.delete("/admin/users/{email}", status_code=status.HTTP_200_OK)
+def admin_delete_user(
+    email: str,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    """L'admin supprime un utilisateur par son email"""
+    # On ne peut pas supprimer l'admin lui-même
+    if email == current_admin.email:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous supprimer vous-même")
+
+    # Trouver l'utilisateur
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # Supprimer l'utilisateur (les stats sont supprimées en cascade)
+    db.delete(user)
+    db.commit()
+
+    return {"message": f"Utilisateur {email} supprimé avec succès"}
+
+@app.put("/admin/users/{email}", response_model=schemas.UserOutAdmin)
+def admin_update_user(
+    email: str,
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
+):
+    """L'admin modifie un utilisateur"""
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # Mettre à jour les champs
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+@app.get("/admin/stats")
+def get_admin_stats(db: Session = Depends(get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Retourne les statistiques des utilisateurs groupées par région et université (normalisées)"""
+    users = db.query(models.User).filter(models.User.is_admin == False).all()
+
+    # Grouper par région et université (normalisé en minuscules, affiché en capitalize)
+    by_region = {}
+    by_institution = {}
+
+    for user in users:
+        # Ligne 1: Normaliser la région (minuscules, trim, puis capitalize)
+        region = (user.region or "Non spécifié").strip().lower()
+        normalized_region = region.capitalize() if region != "non spécifié" else "Non spécifié"
+        by_region[normalized_region] = by_region.get(normalized_region, 0) + 1
+
+        # Ligne 2: Normaliser l'université (minuscules, trim, puis capitalize)
+        institution = (user.institution or "Non spécifié").strip().lower()
+        normalized_institution = institution.capitalize() if institution != "non spécifié" else "Non spécifié"
+        by_institution[normalized_institution] = by_institution.get(normalized_institution, 0) + 1
+
+    return {
+        "total_users": len(users),
+        "by_region": by_region,
+        "by_institution": by_institution
+    }
+
