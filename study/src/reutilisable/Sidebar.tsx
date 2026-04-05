@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Sparkles, Brain, Calendar, User, BookOpen, X, Menu,
+    Home, Brain, Calendar, User, BookOpen, X, Menu,
 } from 'lucide-react';
 
 // ─── Interface mise à jour pour correspondre au backend FastAPI ───────────
@@ -33,9 +33,10 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-    { id: 'resume', icon: <Sparkles size={22} />, title: 'Résumé', subtitle: 'Aperçu & suivi' },
-    { id: 'profil', icon: <User size={22} />, title: 'Profil', subtitle: 'Vos paramètres' },
-    { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation' },
+    { id: 'resume', icon: <Home size={22} />, title: 'Résumé', subtitle: 'Aperçu & suivi', route: null },
+    { id: 'raisonnement', icon: <Brain size={22} />, title: 'Raisonnement', subtitle: 'IA & étude', route: '/raisonnement' },
+    { id: 'profil', icon: <User size={22} />, title: 'Profil', subtitle: 'Vos paramètres', route: '/profile' },
+    { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation', route: null },
 ];
 
 // ─── Génère les initiales intelligentes depuis fullname ou username ────────
@@ -123,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                                 title={title}
                                 onClick={() => {
                                     if (id === 'profil') navigate('/profile');
-
+                                    else if (id === 'raisonnement') navigate('/raisonnement');
                                     else setActiveTab(id);
                                 }}
                                 style={{

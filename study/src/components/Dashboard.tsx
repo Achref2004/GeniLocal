@@ -125,7 +125,7 @@ const Dashboard: React.FC = () => {
                             <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, background: accent, borderRadius: '50%', filter: 'blur(36px)', opacity: 0.35 }} />
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, position: 'relative', zIndex: 1 }}>
                                 <div style={{ width: 48, height: 48, background: accent, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 8px 20px ${accent}40` }}>{icon}</div>
-                                <span style={{ fontSize: mono ? 22 : 32, fontWeight: 800, color: '#fff', fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</span>
+                                <span style={{ fontSize: mono ? 22 : 32, fontWeight: 800, color: '#b6009e', fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</span>
                             </div>
                             <p style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1 }}>{label}</p>
                         </div>
@@ -175,10 +175,10 @@ const Dashboard: React.FC = () => {
 
                 {/* Bottom Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                    <div style={{ background: 'linear-gradient(135deg,#0a2a52,#003d6b,#00657a)', borderRadius: 28, padding: '36px 32px', color: '#fff', position: 'relative', overflow: 'hidden', border: `1px solid ${T.accent}30` }}>
+                    <div style={{ background: 'linear-gradient(135deg, #f0f89f, #cbcbcb, #fdd5a0)', borderRadius: 28, padding: '36px 32px', color: '#fff', position: 'relative', overflow: 'hidden', border: `1px solid ${T.accent}30` }}>
                         <Star style={{ position: 'absolute', top: 24, right: 24, opacity: 0.18 }} size={60} color={T.accent} />
                         <div style={{ position: 'absolute', bottom: -40, left: -40, width: 180, height: 180, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.18 }} />
-                        <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 6 }}>⭐ Version Premium</h2>
+                        <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 6 }}> Version Premium</h2>
                         <p style={{ opacity: 0.85, marginBottom: 24, fontWeight: 500 }}>Débloquez tout le potentiel</p>
                         <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
                             {[' IA avancée avec OCR manuscrit', ' QCM et résumés illimités', ' Planning intelligent avec rappels', 'Avatar personnalisé qui parle', ' Mode hors-ligne complet', ' Support psychologique premium'].map(item => (

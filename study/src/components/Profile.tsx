@@ -5,27 +5,8 @@ import {
     GraduationCap, Camera, Star, Save, Sparkles, CheckCircle2, Globe,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../reutilisable/Themecontext';
+import { useTheme, STARS, BIRDS } from '../reutilisable/Themecontext';
 import Sidebar, { UserProfile } from '../reutilisable/Sidebar';
-
-const STARS = Array.from({ length: 80 }, (_, i) => ({
-    id: i,
-    top: `${Math.random() * 100}%`,
-    left: `${Math.random() * 100}%`,
-    delay: `${(Math.random() * 4).toFixed(2)}s`,
-    duration: `${2 + Math.random() * 3}s`,
-    size: Math.random() > 0.85 ? 2.5 : Math.random() > 0.6 ? 1.5 : 1,
-}));
-
-const BIRDS = Array.from({ length: 14 }, (_, i) => ({
-    id: i,
-    top: `${8 + Math.random() * 75}%`,
-    duration: `${18 + Math.random() * 22}s`,
-    delay: `${(Math.random() * 20).toFixed(1)}s`,
-    scale: 0.5 + Math.random() * 0.9,
-    rtl: Math.random() > 0.5,
-    wingSpeed: `${0.4 + Math.random() * 0.5}s`,
-}));
 
 const Profile: React.FC = () => {
     const navigate = useNavigate();
@@ -145,7 +126,7 @@ const Profile: React.FC = () => {
                 ::-webkit-scrollbar-thumb{background:${T.accent}40;border-radius:6px}
             `}</style>
 
-            {/* ── Stars ── */}
+            {/* ── Stars (Dark mode only) ── */}
             {dark && (
                 <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
                     {STARS.map(s => (
@@ -164,25 +145,27 @@ const Profile: React.FC = () => {
             <div style={{ position: 'absolute', top: -100, right: -100, width: 500, height: 500, background: T.accent, borderRadius: '50%', filter: 'blur(130px)', opacity: dark ? 0.06 : 0.15, pointerEvents: 'none', zIndex: 0 }} />
             <div style={{ position: 'absolute', bottom: -150, left: -100, width: 600, height: 600, background: T.accentSoft, borderRadius: '50%', filter: 'blur(150px)', opacity: dark ? 0.04 : 0.12, pointerEvents: 'none', zIndex: 0 }} />
 
-            {/* ── Birds ── */}
-            <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
-                {BIRDS.map(b => (
-                    <div key={b.id} style={{
-                        position: 'absolute', top: b.top,
-                        left: b.rtl ? 'auto' : '-80px',
-                        right: b.rtl ? '-80px' : 'auto',
-                        animation: `${b.rtl ? 'birdFlyRtl' : 'birdFly'} ${b.duration} ${b.delay} linear infinite`,
-                        opacity: dark ? 0.13 : 0.18,
-                    }}>
-                        <svg width={`${54 * b.scale}`} height={`${28 * b.scale}`} viewBox="0 0 54 28" fill="none">
-                            <path d="M27 14 Q14 2 2 8" stroke={dark ? '#ffffff' : '#0b2a4a'} strokeWidth="2.8" strokeLinecap="round" fill="none"
-                                style={{ animation: `wingFlap ${b.wingSpeed} ease-in-out infinite alternate`, transformOrigin: '27px 14px' }} />
-                            <path d="M27 14 Q40 2 52 8" stroke={dark ? '#ffffff' : '#0b2a4a'} strokeWidth="2.8" strokeLinecap="round" fill="none"
-                                style={{ animation: `wingFlap ${b.wingSpeed} ease-in-out infinite alternate`, transformOrigin: '27px 14px' }} />
-                        </svg>
-                    </div>
-                ))}
-            </div>
+            {/* ── Birds (Light mode only) ── */}
+            {!dark && (
+                <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
+                    {BIRDS.map(b => (
+                        <div key={b.id} style={{
+                            position: 'absolute', top: b.top,
+                            left: b.rtl ? 'auto' : '-80px',
+                            right: b.rtl ? '-80px' : 'auto',
+                            animation: `${b.rtl ? 'birdFlyRtl' : 'birdFly'} ${b.duration} ${b.delay} linear infinite`,
+                            opacity: 0.18,
+                        }}>
+                            <svg width={`${54 * b.scale}`} height={`${28 * b.scale}`} viewBox="0 0 54 28" fill="none">
+                                <path d="M27 14 Q14 2 2 8" stroke="#0b2a4a" strokeWidth="2.8" strokeLinecap="round" fill="none"
+                                    style={{ animation: `wingFlap ${b.wingSpeed} ease-in-out infinite alternate`, transformOrigin: '27px 14px' }} />
+                                <path d="M27 14 Q40 2 52 8" stroke="#0b2a4a" strokeWidth="2.8" strokeLinecap="round" fill="none"
+                                    style={{ animation: `wingFlap ${b.wingSpeed} ease-in-out infinite alternate`, transformOrigin: '27px 14px' }} />
+                            </svg>
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {/* ── Sidebar ── */}
             <Sidebar

@@ -9,6 +9,7 @@ import ForgotPassword from './ForgotPassword';
 import ResetPassword from './ResetPassword';
 import Dashboard from './Dashboard';
 import Profile from './Profile';
+import RaisonnementPage from './RaisonnementPage';
 export function AnimatedRoutes() {
   const location = useLocation();
 
@@ -27,6 +28,7 @@ export function AnimatedRoutes() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/raisonnement" element={<RaisonnementPage />} />
         </Routes>
       </AnimatePresence>
     </div>

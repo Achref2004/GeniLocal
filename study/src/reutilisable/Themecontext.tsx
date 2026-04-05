@@ -1,34 +1,54 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+// ─── Animations décoratives ────────────────────────────────────────────────
+export const STARS = Array.from({ length: 80 }, (_, i) => ({
+    id: i,
+    top: `${Math.random() * 100}%`,
+    left: `${Math.random() * 100}%`,
+    delay: `${(Math.random() * 4).toFixed(2)}s`,
+    duration: `${2 + Math.random() * 3}s`,
+    size: Math.random() > 0.85 ? 2.5 : Math.random() > 0.6 ? 1.5 : 1,
+}));
+
+export const BIRDS = Array.from({ length: 14 }, (_, i) => ({
+    id: i,
+    top: `${8 + Math.random() * 75}%`,
+    duration: `${18 + Math.random() * 22}s`,
+    delay: `${(Math.random() * 20).toFixed(1)}s`,
+    scale: 0.5 + Math.random() * 0.9,
+    rtl: Math.random() > 0.5,
+    wingSpeed: `${0.4 + Math.random() * 0.5}s`,
+}));
+
 // ─── Palettes ────────────────────────────────────────────────────────────────
 export const LIGHT = {
     bg: '#cae1f8ff',
-    card: '#0b2a4a',
-    cardAlt: '#0d3157',
+    card: '#ffffff',
+    cardAlt: '#0378b2',
     accent: '#00c8d4',
     accentSoft: '#6de8ef',
-    text: '#0b2a4a',
-    textMuted: '#3a6a8a',
-    textOnCard: '#ffffff',
-    textOnCardMuted: 'rgba(255,255,255,0.65)',
+    text: '#001f3f',
+    textMuted: '#03a8d1',
+    textOnCard: '#001f3f',
+    textOnCardMuted: 'rgba(0,31,63,0.65)',
     border: 'rgba(0,200,212,0.18)',
     sidebarBg: 'rgba(255,255,255,0.85)',
     sidebarBorder: 'rgba(0,200,212,0.2)',
-    iconInactive: '#6b97b0',
+    iconInactive: '#003d7a',
     iconInactiveBg: '#e0eaf2',
     // Profile extras
     bgGrad: 'linear-gradient(135deg, #cae1f8 0%, #dff0fb 50%, #eef3f8 100%)',
     cardBorder: 'rgba(0,200,212,0.15)',
     cardShadow: '0 8px 40px rgba(11,42,74,0.08)',
-    inputBg: 'rgba(11,42,74,0.04)',
+    inputBg: 'rgba(0,31,63,0.04)',
     inputBorder: 'rgba(0,200,212,0.25)',
     inputFocus: 'rgba(0,200,212,0.5)',
-    labelColor: '#3a6a8a',
+    labelColor: '#003d7a',
     statBg: 'rgba(0,200,212,0.08)',
-    avatarGrad: 'linear-gradient(135deg, #00c8d4, #0b2a4a)',
+    avatarGrad: 'linear-gradient(135deg, #00c8d4, #001f3f)',
     saveBtnGrad: 'linear-gradient(135deg, #00c8d4, #6de8ef)',
-    saveBtnText: '#0b2a4a',
-    backBtn: '#0b2a4a',
+    saveBtnText: '#001f3f',
+    backBtn: '#001f3f',
     isDark: false,
 };
 

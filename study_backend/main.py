@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request, APIRouter
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,10 +7,12 @@ from authlib.integrations.starlette_client import OAuth
 import models, schemas, auth
 from database import engine, get_db
 from auth import get_current_user, get_current_admin
-from typing import List, Dict
+from typing import List, Dict, AsyncGenerator
 from fastapi.security import OAuth2PasswordRequestForm
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+import httpx
+import json
 
 # Création des tables
 models.Base.metadata.create_all(bind=engine)
@@ -509,3 +511,98 @@ def get_admin_stats(db: Session = Depends(get_db), current_admin: models.User = 
         "by_institution": by_institution
     }
 
+
+# ══════════════════════════════════════════════════════════════
+# MODULE IA — RAISONNEMENT (Ollama / Mistral Streaming)
+# ══════════════════════════════════════════════════════════════
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "mistral"
+
+
+def build_ia_prompt(mode: str, text: str, subject: str = "", user_answer: str = "") -> str:
+    if mode == "resume":
+        return (
+            f"Tu es un professeur expert en {subject}. "
+            f"Fais un résumé clair, structuré et concis du texte suivant. "
+            f"Utilise des titres, des puces et des points clés. "
+            f"Réponds uniquement en français.\n\nTexte:\n{text}"
+        )
+    elif mode == "qcm":
+        return (
+            f"Tu es un professeur. Génère exactement 5 questions QCM basées sur le texte suivant. "
+            f"Chaque question doit avoir exactement 4 choix (A, B, C, D) et une seule bonne réponse. "
+            f"Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni apres, dans ce format exact:\n"
+            f'[{{"question":"...","choices":["A. ...","B. ...","C. ...","D. ..."],"correct":0}}]\n'
+            f"Le champ correct est l index (0-3) de la bonne reponse.\n\nTexte:\n{text}"
+        )
+    elif mode == "qr_question":
+        return (
+            f"Tu es un professeur. Pose UNE seule question pertinente basee sur le texte suivant "
+            f"pour tester la comprehension de l etudiant. Pose uniquement la question, rien d autre. "
+            f"Reponds en francais.\n\nTexte:\n{text}"
+        )
+    elif mode == "qr_correct":
+        return (
+            f"Tu es un professeur bienveillant. Voici le contexte:\n\n"
+            f"Texte de reference:\n{text}\n\n"
+            f"Reponse de l etudiant: {user_answer}\n\n"
+            f"Evalue la reponse. Dis si c est correct ou incorrect, explique pourquoi. "
+            f"Sois encourageant. Reponds en francais."
+        )
+    return text
+
+
+async def stream_ollama_response(prompt: str, is_json: bool = False):
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": 0.7, "num_predict": 2048, "top_k": 40, "top_p": 0.9, "num_ctx": 4096}
+    }
+    if is_json:
+        payload["format"] = "json"
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream("POST", OLLAMA_URL, json=payload) as response:
+            full_text = ""
+            async for chunk in response.aiter_lines():
+                line = str(chunk)
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        token = str(data.get("response", ""))
+                        full_text += token
+                        done = bool(data.get("done", False))
+                        yield f"data: {json.dumps({'token': token, 'done': done})}\n\n"
+                        if done:
+                            yield f"data: {json.dumps({'token': '', 'done': True, 'full_text': full_text})}\n\n"
+                            break
+                    except json.JSONDecodeError:
+                        continue
+
+
+@app.post("/api/generate")
+async def ia_generate(request: Request):
+    body = await request.json()
+    mode = body.get("mode", "resume")
+    text = body.get("text", "")
+    subject = body.get("subject", "")
+    user_answer = body.get("user_answer", "")
+    prompt = build_ia_prompt(mode, text, subject, user_answer)
+    is_json = (mode == "qcm")
+    return StreamingResponse(
+        stream_ollama_response(prompt, is_json),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+    )
+
+
+@app.get("/api/health")
+async def ia_health():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("http://localhost:11434/api/tags")
+            models_list = resp.json().get("models", [])
+            return {"status": "ok", "ollama": True, "models": [m["name"] for m in models_list]}
+    except Exception:
+        return {"status": "ok", "ollama": False, "models": []}
