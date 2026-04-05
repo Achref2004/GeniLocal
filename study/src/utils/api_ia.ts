@@ -58,7 +58,17 @@ RÉPONSE: [la réponse courte en français]
 Question et réponse EN FRANÇAIS:`;
 
     case 'qr_correct':
-      return `Tu es un professeur qui corrige. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS. Évalue cette réponse d'étudiant de manière pédagogique et en FRANÇAIS.
+      const nicknames = ['mon amis', 'mon cherie', 'sweety', 'mon petit', 'mon cher', 'mon chouchou', 'ma chère'];
+      const randomNick = nicknames[Math.floor(Math.random() * nicknames.length)];
+      return `Tu es un professeur expert et bienveillant. Tu dois évaluer la réponse d'un étudiant de manière constructive et encourageante. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS.
+
+Utilise cette structure EXACTE:
+1. Commence par: "Bonjour ${randomNick}!"
+2. Évalue si la réponse est correcte ou partiellement correcte
+3. Explique ce qui est bien dans la réponse
+4. Si nécessaire, explique ce qui pourrait être amélioré
+5. Donne une réponse modèle ou des clarifications
+6. Termine par un encouragement positif
 
 Texte de référence:
 "${cleanText}"
@@ -66,7 +76,7 @@ Texte de référence:
 Réponse de l'étudiant:
 "${user_answer}"
 
-Évaluation EN FRANÇAIS UNIQUEMENT:`;
+IMPORTANT: Sois clair, pédagogique et UNIQUEMENT en FRANÇAIS. Évaluation constructive:`;
 
     default:
       return cleanText;
