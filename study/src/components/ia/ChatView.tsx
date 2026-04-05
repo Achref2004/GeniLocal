@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../reutilisable/Themecontext';
 import { fetchStream, detectLanguage } from '../../utils/api_ia';
 import { getMessageCount, incrementMessageCount, canSendMessage, getRemainingMessages, getTimeUntilReset, MAX_MESSAGES_PER_DAY } from '../../utils/chatCounter';
-import { Send, Lock, Loader } from 'lucide-react';
+import { Send, Lock } from 'lucide-react';
 
 interface ChatMessage {
   id: number;
@@ -87,10 +87,10 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
     const newCount = incrementMessageCount();
     setUserMessageCount(newCount);
 
-    // Historique minimal pour vitesse (seulement les 3 derniers échanges)
+    // Historique minimal pour vitesse (seulement les 2 derniers échanges)
     const recentMessages = messages
       .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content.trim()))
-      .slice(-6); // 3 échanges = 6 messages
+      .slice(-4); // 2 échanges = 4 messages
 
     const conversationHistory = recentMessages
       .map(m => `${m.role === 'user' ? 'Étudiant' : 'Professeur'}: ${m.content}`)
@@ -99,9 +99,9 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
     // Détecter la langue du message utilisateur
     const detectedLang = detectLanguage(userInput);
 
-    // Utiliser mode 'qr' simple et rapide, pas 'qr_correct'
+    // Utiliser mode 'qr_correct' optimisé avec nicknames et réponses rapides
     controllerRef.current = fetchStream(
-      { mode: 'qr', text, user_answer: userInput, subject, conversationHistory, language: detectedLang },
+      { mode: 'qr_correct', text, user_answer: userInput, subject, conversationHistory, language: detectedLang },
       (_token, fullText) => {
         // STREAMING: Mise à jour en temps réel du contenu
         setMessages(prev => prev.map(m =>
@@ -187,17 +187,31 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '6px',
                     color: dark ? '#ffffff' : '#001f3f',
                   }}>
-                    <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                    <span style={{ fontSize: '1rem' }}>Mise en attente...</span>
-                    <style>{`
-                      @keyframes spin {
-                        from { transform: rotate(0deg); }
-                        to { transform: rotate(360deg); }
-                      }
-                    `}</style>
+                    {/* Creative Loading Animation */}
+                    <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', height: '16px' }}>
+                      {[0, 1, 2].map((i) => (
+                        <div
+                          key={i}
+                          style={{
+                            width: '3px',
+                            height: '100%',
+                            background: `linear-gradient(180deg, ${T.accent} 0%, ${T.accentSoft} 100%)`,
+                            borderRadius: '2px',
+                            animation: `wave 1.2s ease-in-out ${i * 0.1}s infinite`,
+                          }}
+                        />
+                      ))}
+                      <style>{`
+                        @keyframes wave {
+                          0%, 100% { height: 4px; opacity: 0.5; }
+                          50% { height: 14px; opacity: 1; }
+                        }
+                      `}</style>
+                    </div>
+                    <span style={{ fontSize: '1rem', fontStyle: 'italic' }}>Professeur réfléchit...</span>
                   </div>
                 ) : (
                   <>
