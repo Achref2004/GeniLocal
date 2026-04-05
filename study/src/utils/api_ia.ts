@@ -5,43 +5,68 @@ const USE_OLLAMA = true; // Toggle pour utiliser Ollama hors ligne
 /**
  * Génère des prompts optimisés pour Mistral 7B
  */
-function generatePrompt(mode: string, text: string, subject?: string, user_answer?: string): string {
+function generatePrompt(mode: string, text: string, subject?: string, user_answer?: string, wrongTopics?: string): string {
   const cleanText = text.substring(0, 2000); // Limite pour performance
 
   switch (mode) {
     case 'resume':
-      return `Tu es un professeur expert. Fais un résumé structuré et concis du texte suivant. Format: # Titre, ## Sous-sections, points clés.
+      return `Tu es un professeur expert en français. Fais un résumé structuré et concis du texte suivant. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS. Format: # Titre, ## Sous-sections, points clés.
 
 Texte à résumer:
 "${cleanText}"
 
-Résumé structuré:`;
+Résumé structuré EN FRANÇAIS:`;
 
     case 'qcm':
-      return `Tu es un créateur de quiz QCM. Génère exactement 5 questions à choix multiples au format JSON valide basé sur ce texte.
+      return `Tu es un créateur de quiz QCM en FRANÇAIS. IMPORTANT: Génère une réponse EXCLUSIVEMENT en FRANÇAIS. Génère exactement 5 questions à choix multiples au format JSON valide basé sur ce texte. Les questions ET les réponses doivent TOUTES être en FRANÇAIS.
 
 Format JSON STRICT:
 [
-  {"question": "Question?", "choices": ["Option A", "Option B", "Option C", "Option D"], "correct": 0},
+  {"question": "Question en français?", "choices": ["Option A en français", "Option B en français", "Option C en français", "Option D en français"], "correct": 0},
   ...
 ]
 
 Texte:
 "${cleanText}"
 
-Réponse JSON (commencing with [):`;
+Génère maintenant les questions EN FRANÇAIS uniquement. Réponse JSON (commencing with [):`;
+
+    case 'qcm_remedial':
+      return `Tu es un professeur expert en pédagogie EN FRANÇAIS. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS. L'utilisateur a échoué sur ces sujets: ${wrongTopics}
+
+Génère exactement 3 questions à choix multiples SIMPLES ET EXPLICATIVES pour aider à comprendre. Les questions ET les réponses DOIVENT être en FRANÇAIS. Format JSON STRICT:
+[
+  {"question": "Question en français?", "choices": ["Option A en français", "Option B en français", "Option C en français", "Option D en français"], "correct": 0},
+  ...
+]
+
+Texte de référence:
+"${cleanText}"
+
+Réponds EN FRANÇAIS UNIQUEMENT. Réponse JSON:`;
 
     case 'qr':
-      return `Tu es un professeur. Basé sur ce texte, génère une question pertinente et une réponse courte.
+      return `Tu es un professeur expert EN FRANÇAIS. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS. Basé sur ce texte, génère une question pertinente et une réponse courte en FRANÇAIS.
 
 Texte:
 "${cleanText}"
 
-Réponds au format:
-QUESTION: [la question]
-RÉPONSE: [la réponse courte]
+Réponds EN FRANÇAIS UNIQUEMENT au format:
+QUESTION: [la question en français]
+RÉPONSE: [la réponse courte en français]
 
-Question et réponse:`;
+Question et réponse EN FRANÇAIS:`;
+
+    case 'qr_correct':
+      return `Tu es un professeur qui corrige. IMPORTANT: Réponds UNIQUEMENT en FRANÇAIS. Évalue cette réponse d'étudiant de manière pédagogique et en FRANÇAIS.
+
+Texte de référence:
+"${cleanText}"
+
+Réponse de l'étudiant:
+"${user_answer}"
+
+Évaluation EN FRANÇAIS UNIQUEMENT:`;
 
     default:
       return cleanText;
@@ -52,13 +77,13 @@ Question et réponse:`;
  * Stream response from Ollama (local, hors ligne)
  */
 function fetchStreamOllama(
-  { mode, text, subject = '', user_answer = '' }: { mode: string; text: string; subject?: string; user_answer?: string },
+  { mode, text, subject = '', user_answer = '', wrongTopics = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
 ): AbortController {
   const controller = new AbortController();
-  const prompt = generatePrompt(mode, text, subject, user_answer);
+  const prompt = generatePrompt(mode, text, subject, user_answer, wrongTopics);
 
   fetch(OLLAMA_API, {
     method: 'POST',
@@ -120,7 +145,7 @@ function fetchStreamOllama(
  * Utilise Ollama (hors ligne) en priorité, fallback sur backend si disponible
  */
 export function fetchStream(
-  { mode, text, subject = '', user_answer = '' }: { mode: string; text: string; subject?: string; user_answer?: string },
+  { mode, text, subject = '', user_answer = '', wrongTopics = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
@@ -128,22 +153,22 @@ export function fetchStream(
   // Essaie Ollama d'abord (hors ligne)
   if (USE_OLLAMA) {
     console.log('🔄 Utilisation de Ollama (hors ligne)');
-    return fetchStreamOllama({ mode, text, subject, user_answer }, onToken, onDone, (err) => {
+    return fetchStreamOllama({ mode, text, subject, user_answer, wrongTopics }, onToken, onDone, (err) => {
       console.warn('⚠️ Ollama indisponible, tentative backend...', err.message);
       // Fallback sur backend si Ollama échoue
-      return fetchStreamBackend({ mode, text, subject, user_answer }, onToken, onDone, onError);
+      return fetchStreamBackend({ mode, text, subject, user_answer, wrongTopics }, onToken, onDone, onError);
     });
   }
 
   // Fallback sur backend
-  return fetchStreamBackend({ mode, text, subject, user_answer }, onToken, onDone, onError);
+  return fetchStreamBackend({ mode, text, subject, user_answer, wrongTopics }, onToken, onDone, onError);
 }
 
 /**
  * Connexion au backend distant (pour authentification et fallback)
  */
 function fetchStreamBackend(
-  { mode, text, subject = '', user_answer = '' }: { mode: string; text: string; subject?: string; user_answer?: string },
+  { mode, text, subject = '', user_answer = '', wrongTopics = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
@@ -153,7 +178,7 @@ function fetchStreamBackend(
   fetch(`${API_BASE}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, text, subject, user_answer }),
+    body: JSON.stringify({ mode, text, subject, user_answer, wrongTopics }),
     signal: controller.signal,
   })
     .then(async (response) => {

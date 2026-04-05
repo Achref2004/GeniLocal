@@ -11,11 +11,13 @@ interface Question {
 interface QcmViewProps {
   rawContent: string;
   isStreaming: boolean;
+  onRemedialClick?: (wrongQuestions: Question[], wrongIndexes: number[]) => void;
 }
 
-export default function QcmView({ rawContent, isStreaming }: QcmViewProps) {
+export default function QcmView({ rawContent, isStreaming, onRemedialClick }: QcmViewProps) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showScore, setShowScore] = useState(false);
+  const [showRemedialOffer, setShowRemedialOffer] = useState(false);
 
   const questions = useMemo((): Question[] | null => {
     if (!rawContent) return null;
@@ -49,6 +51,23 @@ export default function QcmView({ rawContent, isStreaming }: QcmViewProps) {
     if (!questions) return 0;
     return questions.reduce((acc, q, i) => acc + (answers[i] === q.correct ? 1 : 0), 0);
   }, [answers, questions]);
+
+  const wrongAnswers = useMemo(() => {
+    if (!questions) return { questions: [], indexes: [] };
+    const wrongIndexes = questions
+      .map((q, i) => ({ q, i }))
+      .filter(({ q, i }) => answers[i] !== undefined && answers[i] !== q.correct)
+      .map(({ i }) => i);
+    const wrongQuestions = wrongIndexes.map(i => questions[i]);
+    return { questions: wrongQuestions, indexes: wrongIndexes };
+  }, [answers, questions]);
+
+  // Show remedial offer when quiz is complete and score < 5
+  useMemo(() => {
+    if (showScore && score < 5 && wrongAnswers.questions.length > 0 && !showRemedialOffer) {
+      setShowRemedialOffer(true);
+    }
+  }, [showScore, score, wrongAnswers.questions.length, showRemedialOffer]);
 
   if (isStreaming || !questions) {
     if (isStreaming) {
@@ -87,6 +106,75 @@ export default function QcmView({ rawContent, isStreaming }: QcmViewProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px', width: '100%', maxWidth: '900px', background: 'transparent', minHeight: 'auto' }}>
+      {/* Remedial Offer Panel */}
+      {showRemedialOffer && onRemedialClick && (
+        <div style={{
+          background: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.5)',
+          borderRadius: '12px',
+          padding: '24px',
+          backdropFilter: 'blur(32px)',
+        }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '8px', color: '#3b82f6' }}>
+            💡 Besoin d'aide ?
+          </h3>
+          <p style={{ color: '#cbd5e1', marginBottom: '16px', fontSize: '0.875rem' }}>
+            Vous avez des difficultés sur {wrongAnswers.questions.length} question{wrongAnswers.questions.length > 1 ? 's' : ''}.
+            Laissez-nous générer des questions adaptées pour mieux comprendre.
+          </p>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => onRemedialClick(wrongAnswers.questions, wrongAnswers.indexes)}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #0ea5e9 100%)',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                fontSize: '0.875rem',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = '0 8px 16px rgba(59, 130, 246, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+              }}
+            >
+              🎯 Générer des questions de rattrapage
+            </button>
+            <button
+              onClick={() => setShowRemedialOffer(false)}
+              style={{
+                padding: '10px 20px',
+                borderRadius: '8px',
+                background: 'transparent',
+                color: '#cbd5e1',
+                border: '1px solid rgba(71, 85, 105, 0.5)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                fontSize: '0.875rem',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = '#3b82f6';
+                (e.currentTarget as HTMLButtonElement).style.color = '#3b82f6';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(71, 85, 105, 0.5)';
+                (e.currentTarget as HTMLButtonElement).style.color = '#cbd5e1';
+              }}
+            >
+              Passer
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Score panel */}
       {showScore && (
         <div style={{

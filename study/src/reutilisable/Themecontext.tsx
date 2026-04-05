@@ -25,7 +25,7 @@ export const LIGHT = {
     bg: '#cae1f8ff',
     card: '#ffffff',
     cardAlt: '#0378b2',
-    accent: '#00c8d4',
+    accent: '#008c94',
     accentSoft: '#6de8ef',
     text: '#001f3f',
     textMuted: '#03a8d1',

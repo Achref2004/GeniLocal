@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../reutilisable/Themecontext';
 import ResumeView from './ia/ResumeView';
@@ -19,7 +19,7 @@ import {
   saveAvatarConfig,
   type AvatarConfig,
 } from '../utils/avatarConfig';
-import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle } from 'lucide-react';
+import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp } from 'lucide-react';
 
 // SVG Icons for action cards
 const ResumeIcon = () => (
@@ -41,22 +41,31 @@ export default function RaisonnementPage() {
   const [text, setText] = useState('');
   const [subject, setSubject] = useState('');
   const [showSubjectPrompt, setShowSubjectPrompt] = useState(false);
+  const [pendingAction, setPendingAction] = useState<null | 'resume' | 'qcm' | 'qr'>(null);
 
-  const [activeMode, setActiveMode] = useState<null | 'resume' | 'qcm' | 'qr'>(null);
+  const [activeMode, setActiveMode] = useState<null | 'resume' | 'qcm' | 'qr' | 'qcm_remedial'>(null);
   const [streamContent, setStreamContent] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [rawQcmContent, setRawQcmContent] = useState('');
+  const [rawRemedialContent, setRawRemedialContent] = useState('');
 
   const [qrQuestion, setQrQuestion] = useState('');
   const [qrCorrection, setQrCorrection] = useState('');
   const [isStreamingQuestion, setIsStreamingQuestion] = useState(false);
   const [isStreamingCorrection, setIsStreamingCorrection] = useState(false);
+  const [remedialWrongTopics, setRemedialWrongTopics] = useState('');
 
   const [history, setHistory] = useState<HistoryItem[]>(loadHistory());
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(loadAvatarConfig());
   const [showAvatarCreator, setShowAvatarCreator] = useState(false);
 
   const controllerRef = useRef<AbortController | null>(null);
+
+  // Extraire les matières uniques de l'historique
+  const existingSubjects = useMemo(() => {
+    const subjects = Array.from(new Set(history.map(item => item.subject).filter((s): s is string => Boolean(s))));
+    return subjects;
+  }, [history]);
 
   const cancelStream = useCallback(() => {
     if (controllerRef.current) {
@@ -69,6 +78,7 @@ export default function RaisonnementPage() {
     cancelStream();
     setStreamContent('');
     setRawQcmContent('');
+    setRawRemedialContent('');
     setIsStreaming(false);
     setQrQuestion('');
     setQrCorrection('');
@@ -78,12 +88,14 @@ export default function RaisonnementPage() {
 
   const handleResume = useCallback(() => {
     if (!text.trim()) return;
+    setPendingAction('resume');
     setShowSubjectPrompt(true);
   }, [text]);
 
   const confirmResume = useCallback(() => {
     if (!subject.trim()) return;
     setShowSubjectPrompt(false);
+    setPendingAction(null);
     resetResults();
     setActiveMode('resume');
     setIsStreaming(true);
@@ -106,17 +118,25 @@ export default function RaisonnementPage() {
 
   const handleQcm = useCallback(() => {
     if (!text.trim()) return;
+    setPendingAction('qcm');
+    setShowSubjectPrompt(true);
+  }, [text]);
+
+  const confirmQcm = useCallback(() => {
+    if (!subject.trim()) return;
+    setShowSubjectPrompt(false);
+    setPendingAction(null);
     resetResults();
     setActiveMode('qcm');
     setIsStreaming(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'qcm', text },
+      { mode: 'qcm', text, subject },
       (_token, fullText) => setRawQcmContent(fullText),
       (fullText) => {
         setIsStreaming(false);
         setRawQcmContent(fullText);
-        const newHistory = saveToHistory({ mode: 'qcm', text: text.substring(0, 200), result: fullText });
+        const newHistory = saveToHistory({ mode: 'qcm', text: text.substring(0, 200), subject, result: fullText });
         setHistory(newHistory);
       },
       (err) => {
@@ -124,16 +144,24 @@ export default function RaisonnementPage() {
         setRawQcmContent('❌ Erreur: ' + err.message);
       }
     );
-  }, [text, resetResults]);
+  }, [text, subject, resetResults]);
 
   const handleQr = useCallback(() => {
     if (!text.trim()) return;
+    setPendingAction('qr');
+    setShowSubjectPrompt(true);
+  }, [text]);
+
+  const confirmQr = useCallback(() => {
+    if (!subject.trim()) return;
+    setShowSubjectPrompt(false);
+    setPendingAction(null);
     resetResults();
     setActiveMode('qr');
     setIsStreamingQuestion(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'qr_question', text },
+      { mode: 'qr_question', text, subject },
       (_token, fullText) => setQrQuestion(fullText),
       (fullText) => {
         setIsStreamingQuestion(false);
@@ -144,7 +172,7 @@ export default function RaisonnementPage() {
         setQrQuestion('❌ Erreur: ' + err.message);
       }
     );
-  }, [text, resetResults]);
+  }, [text, subject, resetResults]);
 
   const handleQrAnswer = useCallback((userAnswer: string) => {
     setIsStreamingCorrection(true);
@@ -169,6 +197,33 @@ export default function RaisonnementPage() {
       }
     );
   }, [text, qrQuestion]);
+
+  const handleRemediaq = useCallback((wrongQuestions: any[], wrongIndexes: number[]) => {
+    // Créer une description des sujets des questions incorrectes
+    const topics = wrongQuestions.map(q => q.question).join(' | ');
+    setRemedialWrongTopics(topics);
+    setActiveMode('qcm_remedial');
+    setIsStreaming(true);
+
+    controllerRef.current = fetchStream(
+      { mode: 'qcm_remedial', text, wrongTopics: topics },
+      (_token, fullText) => setRawRemedialContent(fullText),
+      (fullText) => {
+        setIsStreaming(false);
+        setRawRemedialContent(fullText);
+        const newHistory = saveToHistory({
+          mode: 'qcm_remedial',
+          text: text.substring(0, 200),
+          result: fullText
+        });
+        setHistory(newHistory);
+      },
+      (err) => {
+        setIsStreaming(false);
+        setRawRemedialContent('❌ Erreur: ' + err.message);
+      }
+    );
+  }, [text]);
 
   const handleHistorySelect = useCallback((item: HistoryItem) => {
     setText(item.text || '');
@@ -370,13 +425,42 @@ export default function RaisonnementPage() {
         flexDirection: 'column',
         position: 'relative',
       }}>
-        {/* Home Button - Top Right */}
+        {/* Buttons - Top Right */}
         <div style={{
           position: 'absolute',
           top: 24,
           right: 24,
           zIndex: 50,
+          display: 'flex',
+          gap: 12,
         }}>
+          <button
+            onClick={() => navigate('/progression')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 48,
+              height: 48,
+              borderRadius: 12,
+              background: `${T.accentSoft}20`,
+              border: `2px solid ${T.accentSoft}`,
+              color: T.accentSoft,
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = `${T.accentSoft}40`;
+              (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1.1)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = `${T.accentSoft}20`;
+              (e.currentTarget as HTMLButtonElement).style.transform = 'scale(1)';
+            }}
+            title="Voir la progression"
+          >
+            <TrendingUp size={24} strokeWidth={2} />
+          </button>
           <button
             onClick={() => navigate('/dashboard')}
             style={{
@@ -432,12 +516,40 @@ export default function RaisonnementPage() {
                   <QcmView
                     rawContent={rawQcmContent}
                     isStreaming={isStreaming}
+                    onRemedialClick={handleRemediaq}
                   />
+                </div>
+              )}
+              {activeMode === 'qcm_remedial' && (
+                <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: '20px', minHeight: '100%' }}>
+                  <div style={{ width: '100%', maxWidth: '900px' }}>
+                    <div style={{
+                      background: 'rgba(168, 85, 247, 0.1)',
+                      border: '1px solid rgba(168, 85, 247, 0.3)',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      marginBottom: '20px',
+                      backdropFilter: 'blur(32px)',
+                    }}>
+                      <h3 style={{ color: '#a855f7', fontWeight: 'bold', marginBottom: '8px' }}>
+                        🎯 Questions de rattrapage adaptées
+                      </h3>
+                      <p style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
+                        Ces questions vous aideront à mieux comprendre les sujets problématiques.
+                      </p>
+                    </div>
+                    <QcmView
+                      rawContent={rawRemedialContent}
+                      isStreaming={isStreaming}
+                    />
+                  </div>
                 </div>
               )}
               {activeMode === 'qr' && (
                 <div style={{ width: '100%', padding: '48px', margin: '0 auto' }}>
                   <QrView
+                    text={text}
+                    subject={subject}
                     questionContent={qrQuestion}
                     isStreamingQuestion={isStreamingQuestion}
                     correctionContent={qrCorrection}
@@ -656,7 +768,7 @@ export default function RaisonnementPage() {
         </main>
       </div>
 
-      {/* Subject Prompt Modal */}
+      {/* Subject Selection Modal */}
       {showSubjectPrompt && (
         <div style={{
           position: 'fixed',
@@ -673,17 +785,72 @@ export default function RaisonnementPage() {
             border: `1px solid ${T.border}`,
             borderRadius: 16,
             padding: 32,
-            maxWidth: 448,
+            maxWidth: 480,
             width: 'calc(100% - 32px)',
           }}>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: T.text, marginBottom: 8 }}>📚 Nom de la matière</h3>
-            <p style={{ fontSize: '0.875rem', color: T.textMuted, marginBottom: 20 }}>Contextualiser votre résumé</p>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: T.text, marginBottom: 8 }}>
+              📚 Sélectionnez ou créez une matière
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: T.textMuted, marginBottom: 24 }}>
+              Choisissez parmi vos matières existantes ou créez une nouvelle
+            </p>
+
+            {/* Matières existantes */}
+            {existingSubjects.length > 0 && (
+              <>
+                <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: T.accent, textTransform: 'uppercase', marginBottom: 12 }}>
+                  Matières récentes
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px', marginBottom: '24px' }}>
+                  {existingSubjects.map((subj, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setSubject(subj)}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        background: subject === subj ? `${T.accent}40` : `${T.accent}10`,
+                        border: `1px solid ${subject === subj ? T.accent : T.border}`,
+                        color: subject === subj ? T.accent : T.text,
+                        fontSize: '0.875rem',
+                        fontWeight: subject === subj ? 'bold' : '500',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
+                        (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}20`;
+                      }}
+                      onMouseLeave={(e) => {
+                        if (subject !== subj) {
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
+                          (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}10`;
+                        }
+                      }}
+                    >
+                      {subj}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* Ou entrer une nouvelle matière */}
+            <p style={{ fontSize: '0.75rem', fontWeight: 'bold', color: T.accent, textTransform: 'uppercase', marginBottom: '12px' }}>
+              {existingSubjects.length > 0 ? 'Ou saisissez une nouvelle matière' : 'Saisissez le nom de la matière'}
+            </p>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="Ex: Mathématiques, Histoire..."
-              onKeyDown={(e) => e.key === 'Enter' && confirmResume()}
+              placeholder="Ex: Mathématiques, Histoire, Biologie..."
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && subject.trim()) {
+                  if (pendingAction === 'resume') confirmResume();
+                  else if (pendingAction === 'qcm') confirmQcm();
+                  else if (pendingAction === 'qr') confirmQr();
+                }
+              }}
               autoFocus
               style={{
                 width: '100%',
@@ -695,11 +862,17 @@ export default function RaisonnementPage() {
                 fontSize: '0.875rem',
                 outline: 'none',
                 boxSizing: 'border-box',
+                marginBottom: '24px',
               }}
             />
-            <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+
+            <div style={{ display: 'flex', gap: 12 }}>
               <button
-                onClick={() => setShowSubjectPrompt(false)}
+                onClick={() => {
+                  setShowSubjectPrompt(false);
+                  setPendingAction(null);
+                  setSubject('');
+                }}
                 style={{
                   flex: 1,
                   padding: '10px 16px',
@@ -723,7 +896,11 @@ export default function RaisonnementPage() {
                 Annuler
               </button>
               <button
-                onClick={confirmResume}
+                onClick={() => {
+                  if (pendingAction === 'resume') confirmResume();
+                  else if (pendingAction === 'qcm') confirmQcm();
+                  else if (pendingAction === 'qr') confirmQr();
+                }}
                 disabled={!subject.trim()}
                 style={{
                   flex: 1,
@@ -745,7 +922,7 @@ export default function RaisonnementPage() {
                   (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
                 }}
               >
-                Générer
+                Continuer
               </button>
             </div>
           </div>
