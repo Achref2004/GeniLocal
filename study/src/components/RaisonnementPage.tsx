@@ -9,6 +9,7 @@ import AvatarCreator from './ia/AvatarCreator';
 import AvatarCanvas from './ia/AvatarCanvas';
 import {
   fetchStream,
+  detectLanguage,
   loadHistory,
   saveToHistory,
   clearHistory,
@@ -101,7 +102,7 @@ export default function RaisonnementPage() {
     setIsStreaming(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'resume', text, subject },
+      { mode: 'resume', text, subject, language: detectLanguage(text) },
       (_token, fullText) => setStreamContent(fullText),
       (fullText) => {
         setIsStreaming(false);
@@ -131,7 +132,7 @@ export default function RaisonnementPage() {
     setIsStreaming(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'qcm', text, subject },
+      { mode: 'qcm', text, subject, language: detectLanguage(text) },
       (_token, fullText) => setRawQcmContent(fullText),
       (fullText) => {
         setIsStreaming(false);
@@ -206,7 +207,7 @@ export default function RaisonnementPage() {
     setIsStreaming(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'qcm_remedial', text, wrongTopics: topics },
+      { mode: 'qcm_remedial', text, wrongTopics: topics, language: detectLanguage(text) },
       (_token, fullText) => setRawRemedialContent(fullText),
       (fullText) => {
         setIsStreaming(false);

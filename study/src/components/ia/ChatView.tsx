@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../reutilisable/Themecontext';
-import { fetchStream } from '../../utils/api_ia';
+import { fetchStream, detectLanguage } from '../../utils/api_ia';
 import { getMessageCount, incrementMessageCount, canSendMessage, getRemainingMessages, getTimeUntilReset, MAX_MESSAGES_PER_DAY } from '../../utils/chatCounter';
 import { Send, Lock, Loader } from 'lucide-react';
 
@@ -87,9 +87,21 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
     const newCount = incrementMessageCount();
     setUserMessageCount(newCount);
 
-    // Envoyer à l'IA avec streaming
+    // Historique minimal pour vitesse (seulement les 3 derniers échanges)
+    const recentMessages = messages
+      .filter(m => m.role === 'user' || (m.role === 'assistant' && m.content.trim()))
+      .slice(-6); // 3 échanges = 6 messages
+
+    const conversationHistory = recentMessages
+      .map(m => `${m.role === 'user' ? 'Étudiant' : 'Professeur'}: ${m.content}`)
+      .join('\n');
+
+    // Détecter la langue du message utilisateur
+    const detectedLang = detectLanguage(userInput);
+
+    // Utiliser mode 'qr' simple et rapide, pas 'qr_correct'
     controllerRef.current = fetchStream(
-      { mode: 'qr_correct', text, user_answer: userInput, subject },
+      { mode: 'qr', text, user_answer: userInput, subject, conversationHistory, language: detectedLang },
       (_token, fullText) => {
         // STREAMING: Mise à jour en temps réel du contenu
         setMessages(prev => prev.map(m =>
@@ -141,70 +153,66 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         flexDirection: 'column',
         gap: '12px',
       }}>
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            style={{
-              display: 'flex',
-              justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-              marginBottom: '8px',
-            }}
-          >
-            <div
-              style={{
-                maxWidth: '70%',
-                padding: '12px 16px',
-                borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                background: 'transparent',
-                color: msg.role === 'user' ? T.text : T.text,
-                border: msg.role === 'user'
-                  ? `2px solid ${T.accent}`
-                  : '2px solid #d946ef',
-                fontSize: '0.875rem',
-                lineHeight: '1.5',
-              }}
-            >
-              <p style={{ margin: '0 0 4px 0', whiteSpace: 'pre-wrap' }}>
-                {msg.content}
-              </p>
-              <p style={{ margin: 0, fontSize: '0.7rem', color: T.textMuted, textAlign: 'right' }}>
-                {msg.timestamp}
-              </p>
-            </div>
-          </div>
-        ))}
+        {messages.map((msg) => {
+          const isCurrentlyLoading = isLoading && msg === messages[messages.length - 1] && msg.role === 'assistant' && msg.content === '';
 
-        {/* Loading Indicator before streaming */}
-        {isLoading && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'flex-start',
-            marginBottom: '8px',
-          }}>
+          return (
             <div
+              key={msg.id}
               style={{
-                maxWidth: '70%',
-                padding: '12px 16px',
-                borderRadius: '4px 16px 16px 16px',
-                background: 'transparent',
-                border: '2px solid #d946ef',
                 display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                color: T.textMuted,
+                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                marginBottom: '8px',
               }}
             >
-              <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
-              <span style={{ fontSize: '0.875rem' }}>Mise en attente...</span>
-              <style>{`
-                @keyframes spin {
-                  from { transform: rotate(0deg); }
-                  to { transform: rotate(360deg); }
-                }
-              `}</style>
+              <div
+                style={{
+                  maxWidth: '70%',
+                  padding: '12px 16px',
+                  borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                  background: 'transparent',
+                  color: dark
+                    ? '#ffffff'
+                    : '#001f3f',
+                  border: msg.role === 'user'
+                    ? `2px solid ${T.accent}`
+                    : '2px solid #f09dfd',
+                  fontSize: '1rem',
+                  lineHeight: '1.6',
+                  boxShadow: `0 4px 12px ${msg.role === 'user' ? T.accent : '#d946ef'}40`,
+                  transition: 'all 0.3s ease',
+                }}
+              >
+                {isCurrentlyLoading ? (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    color: dark ? '#ffffff' : '#001f3f',
+                  }}>
+                    <Loader size={16} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: '1rem' }}>Mise en attente...</span>
+                    <style>{`
+                      @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                      }
+                    `}</style>
+                  </div>
+                ) : (
+                  <>
+                    <p style={{ margin: '0 0 4px 0', whiteSpace: 'pre-wrap' }}>
+                      {msg.content}
+                    </p>
+                    <p style={{ margin: 0, fontSize: '0.7rem', color: T.textMuted, textAlign: 'right' }}>
+                      {msg.timestamp}
+                    </p>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })}
 
         <div ref={messagesEndRef} />
       </div>
