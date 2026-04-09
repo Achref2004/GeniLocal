@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, status, Request, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, status, Request, APIRouter, UploadFile, File
 from fastapi.responses import RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -13,6 +13,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
 import httpx
 import json
+import os
+import sys
+import tempfile
 
 # Création des tables
 models.Base.metadata.create_all(bind=engine)
@@ -606,3 +609,174 @@ async def ia_health():
             return {"status": "ok", "ollama": True, "models": [m["name"] for m in models_list]}
     except Exception:
         return {"status": "ok", "ollama": False, "models": []}
+
+
+# ══════════════════════════════════════════════════════════════
+# MODULE OCR — Upload & Parse Schedule into Calendar Events
+# ══════════════════════════════════════════════════════════════
+
+# Add the parent folder (project root) to path so we can import ocr_hybrid
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
+@app.post("/api/ocr/schedule")
+async def ocr_schedule(file: UploadFile = File(...)):
+    """
+    Receives a file (PDF, image, DOCX), runs OCR via ocr_hybrid.py,
+    then uses Ollama to parse the extracted text into calendar events.
+    """
+    # Save uploaded file to temp
+    suffix = os.path.splitext(file.filename or "upload")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    raw_text = ""
+    try:
+        # Try importing and running OCR
+        try:
+            from ocr_hybrid import process_document
+            result = process_document(tmp_path, languages=["fr", "en"], verbose=False)
+            raw_text = result.full_text or ""
+        except ImportError:
+            # Fallback: just read text if it's a text-based file
+            raw_text = f"[OCR module not available] File received: {file.filename}"
+        except Exception as e:
+            raw_text = f"[OCR Error] {str(e)}"
+
+        if not raw_text.strip():
+            return {"events": [], "raw_text": "Aucun texte detecte dans le document."}
+
+        # Use Ollama to parse the text into events
+        events = []
+        try:
+            parse_prompt = (
+                "Tu es un assistant qui extrait les devoirs et cours d'un emploi du temps scolaire. "
+                "Analyse le texte suivant et retourne un JSON valide contenant une cle 'events' "
+                "avec une liste d'elements. "
+                "Chaque element doit avoir: "
+                "- title (nom du cours, devoir ou evenement), "
+                "- date (format YYYY-MM-DD si la date est visible dans le texte, sinon chaine vide \"\"), "
+                "- subject (la matiere si identifiable, sinon chaine vide \"\"), "
+                "- category (etude, revision, examen, ou loisir). "
+                "IMPORTANT: Si une date n'est pas clairement indiquee dans le texte, "
+                "mets une chaine vide pour le champ date. Ne devine PAS les dates. "
+                "Extrais TOUS les elements visibles, meme ceux sans date. "
+                "Reponds UNIQUEMENT avec le JSON, sans texte avant ni apres.\n\n"
+                f"Texte extrait:\n{raw_text[:3000]}\n\n"
+                "JSON:"
+            )
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": parse_prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0.3, "num_predict": 1024}
+                })
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    response_text = data.get("response", "")
+                    try:
+                        parsed = json.loads(response_text)
+                        if isinstance(parsed, list):
+                            events = parsed
+                        elif isinstance(parsed, dict) and "events" in parsed:
+                            events = parsed["events"]
+                        elif isinstance(parsed, dict) and "evenements" in parsed:
+                            events = parsed["evenements"]
+                    except json.JSONDecodeError:
+                        pass
+        except Exception:
+            # Ollama not available — return raw text
+            pass
+
+        return {"events": events, "raw_text": raw_text[:5000]}
+
+    finally:
+        # Clean up temp file
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+@app.post("/api/ocr/extract-text")
+async def ocr_extract_text(file: UploadFile = File(...)):
+    """
+    Receives a file (PDF, image, DOCX), runs OCR via ocr_hybrid.py,
+    then uses Ollama to clean/correct the extracted text.
+    Returns both the raw OCR text and the cleaned version.
+    Used by the Raisonnement page for file attachment.
+    """
+    suffix = os.path.splitext(file.filename or "upload")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    raw_text = ""
+    cleaned_text = ""
+    try:
+        # Run OCR
+        try:
+            from ocr_hybrid import process_document
+            result = process_document(tmp_path, languages=["fr", "en"], verbose=False)
+            raw_text = result.full_text or ""
+        except ImportError:
+            raw_text = f"[OCR module not available] File received: {file.filename}"
+        except Exception as e:
+            raw_text = f"[OCR Error] {str(e)}"
+
+        if not raw_text.strip():
+            return {"raw_text": "", "cleaned_text": "", "error": "Aucun texte detecte dans le document."}
+
+        # Use Ollama to clean and correct the OCR text
+        cleaned_text = raw_text  # Default: use raw if Ollama fails
+        try:
+            clean_prompt = (
+                "Tu es un assistant specialise dans la correction de texte extrait par OCR. "
+                "Le texte suivant a ete extrait automatiquement d'un document (PDF, image ou Word). "
+                "Il peut contenir des erreurs d'OCR, des caracteres mal reconnus, ou un formatage casse. "
+                "Corrige les erreurs evidentes, ameliore la mise en forme, "
+                "et retourne le texte nettoye et bien structure. "
+                "Garde le contenu original intact - ne resume PAS, ne supprime PAS d'information. "
+                "Corrige seulement les erreurs de reconnaissance. "
+                "Reponds UNIQUEMENT avec le texte corrige, sans commentaire.\n\n"
+                f"Texte brut extrait par OCR:\n{raw_text[:4000]}"
+            )
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": clean_prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.2, "num_predict": 4096}
+                })
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    response_text = data.get("response", "")
+                    if response_text.strip():
+                        cleaned_text = response_text.strip()
+        except Exception:
+            # Ollama not available — use raw text
+            pass
+
+        return {
+            "raw_text": raw_text[:8000],
+            "cleaned_text": cleaned_text[:8000],
+            "filename": file.filename,
+        }
+
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+

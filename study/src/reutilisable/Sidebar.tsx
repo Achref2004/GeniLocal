@@ -36,7 +36,7 @@ const NAV_ITEMS = [
     { id: 'resume', icon: <Home size={22} />, title: 'Résumé', subtitle: 'Aperçu & suivi', route: null },
     { id: 'raisonnement', icon: <Brain size={22} />, title: 'Raisonnement', subtitle: 'IA & étude', route: '/raisonnement' },
     { id: 'profil', icon: <User size={22} />, title: 'Profil', subtitle: 'Vos paramètres', route: '/profile' },
-    { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation', route: null },
+    { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation', route: '/planning' },
 ];
 
 // ─── Génère les initiales intelligentes depuis fullname ou username ────────
@@ -116,15 +116,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                 {/* ── Navigation ── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flex: 1, marginTop: 46 }}>
-                    {NAV_ITEMS.map(({ id, icon, title, subtitle }) => {
+                    {NAV_ITEMS.map(({ id, icon, title, subtitle, route }) => {
                         const isActive = activeTab === id;
                         return (
                             <button
                                 key={id}
                                 title={title}
                                 onClick={() => {
-                                    if (id === 'profil') navigate('/profile');
-                                    else if (id === 'raisonnement') navigate('/raisonnement');
+                                    if (route) navigate(route);
                                     else setActiveTab(id);
                                 }}
                                 style={{

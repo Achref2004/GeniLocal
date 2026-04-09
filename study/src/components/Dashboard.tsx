@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import Sidebar, { UserProfile } from '../reutilisable/Sidebar';
 import { useTheme } from '../reutilisable/Themecontext'; // ← thème global
+import { loadHistory } from '../utils/api_ia';
+import { aggregateProgress, SubjectProgress } from '../utils/progressionStats';
 
 interface UserStats {
     total_study_seconds: number;
@@ -55,6 +57,7 @@ const Dashboard: React.FC = () => {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [activeTab, setActiveTab] = useState('resume');
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+    const [progressData, setProgressData] = useState<SubjectProgress[]>([]);
     const token = localStorage.getItem('token');
 
     const handleLogout = () => {
@@ -81,6 +84,31 @@ const Dashboard: React.FC = () => {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
+
+    // Charger les données de progression depuis l'historique
+    useEffect(() => {
+        const loadProgressData = () => {
+            const history = loadHistory();
+            const progress = aggregateProgress(history);
+            setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
+        };
+
+        loadProgressData();
+        const interval = setInterval(loadProgressData, 2000); // Rafraîchir toutes les 2s
+        return () => clearInterval(interval);
+    }, []);
+
+    // Calculer les statistiques globales de progression
+    const globalProgression = useMemo(() => {
+        if (progressData.length === 0) {
+            return {
+                totalSubjects: 0,
+            };
+        }
+        return {
+            totalSubjects: progressData.length,
+        };
+    }, [progressData]);
 
     const formatTime = (s: number) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -111,8 +139,8 @@ const Dashboard: React.FC = () => {
 
         return (
             <>
-                {/* 4 Stats Cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 20, marginBottom: 24 }}>
+                {/* 4 Stats Cards + 1 Progression Card (aligned on same row) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 20, marginBottom: 24 }}>
                     {[
                         { icon: <Clock size={26} />, accent: '#4f6ef7', label: "Heures d'étude", value: formatTime(stats.total_study_seconds), mono: true },
                         { icon: <TrendingUp size={26} />, accent: '#00b8d9', label: 'Jours de présence', value: String(stats.days_present) },
@@ -130,9 +158,43 @@ const Dashboard: React.FC = () => {
                             <p style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1 }}>{label}</p>
                         </div>
                     ))}
-                </div>
 
-                {/* Graph + Ring */}
+                    {/* Progression Card (aligned with the 4 stats) */}
+                    <div
+                        style={card({
+                            padding: '24px 22px',
+                            position: 'relative',
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                            transition: 'all 0.3s ease'
+                        })}
+                        onClick={() => navigate('/progression')}
+                        onMouseEnter={e => {
+                            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)';
+                            (e.currentTarget as HTMLDivElement).style.boxShadow = `0 12px 32px #8b5cf630`;
+                        }}
+                        onMouseLeave={e => {
+                            (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
+                            (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                        }}
+                    >
+                        <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, background: '#8b5cf6', borderRadius: '50%', filter: 'blur(36px)', opacity: 0.35 }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, position: 'relative', zIndex: 1 }}>
+                            <div style={{ width: 48, height: 48, background: '#8b5cf6', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 8px 20px #8b5cf640` }}>
+                                <TrendingUp size={26} />
+                            </div>
+                            <span style={{ fontSize: 32, fontWeight: 800, color: '#8b5cf6' }}>
+                                {globalProgression.totalSubjects}
+                            </span>
+                        </div>
+                        <p style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1, marginBottom: 6 }}>Ma Progression</p>
+                        <p style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 500, fontSize: 12, position: 'relative', zIndex: 1 }}>
+                            {globalProgression.totalSubjects > 0
+                                ? `${globalProgression.totalSubjects} matière(s)`
+                                : 'Aucune donnée'}
+                        </p>
+                    </div>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
                     <div style={card({ padding: '28px 24px', position: 'relative', overflow: 'hidden' })}>
                         <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.08 }} />
@@ -175,24 +237,47 @@ const Dashboard: React.FC = () => {
 
                 {/* Bottom Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                    <div style={{ background: 'linear-gradient(135deg, #f0f89f, #cbcbcb, #fdd5a0)', borderRadius: 28, padding: '36px 32px', color: '#fff', position: 'relative', overflow: 'hidden', border: `1px solid ${T.accent}30` }}>
-                        <Star style={{ position: 'absolute', top: 24, right: 24, opacity: 0.18 }} size={60} color={T.accent} />
-                        <div style={{ position: 'absolute', bottom: -40, left: -40, width: 180, height: 180, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.18 }} />
-                        <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 6 }}> Version Premium</h2>
-                        <p style={{ opacity: 0.85, marginBottom: 24, fontWeight: 500 }}>Débloquez tout le potentiel</p>
-                        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+                    {/* Premium Card - Theme Aware with Gold Text */}
+                    <div style={{
+                        background: dark
+                            ? `linear-gradient(135deg, ${T.card} 0%, ${T.card}dd 100%)`
+                            : `linear-gradient(135deg, ${T.card} 0%, ${T.card}ee 100%)`,
+                        borderRadius: 28,
+                        padding: '36px 32px',
+                        position: 'relative',
+                        overflow: 'hidden',
+                        border: `2px solid #d4af37`,
+                        boxShadow: `0 0 20px #d4af3720`
+                    }}>
+                        <Star style={{ position: 'absolute', top: 24, right: 24, opacity: 0.15 }} size={60} color="#d4af37" />
+                        <div style={{ position: 'absolute', bottom: -40, left: -40, width: 180, height: 180, background: '#d4af37', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.12 }} />
+
+                        <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 6, color: '#d4af37', position: 'relative', zIndex: 1 }}>Version Premium</h2>
+                        <p style={{ color: T.textOnCard, marginBottom: 24, fontWeight: 500, position: 'relative', zIndex: 1 }}>Débloquez tout le potentiel</p>
+
+                        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28, position: 'relative', zIndex: 1 }}>
                             {[' IA avancée avec OCR manuscrit', ' QCM et résumés illimités', ' Planning intelligent avec rappels', 'Avatar personnalisé qui parle', ' Mode hors-ligne complet', ' Support psychologique premium'].map(item => (
-                                <li key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, fontWeight: 500, fontSize: 15 }}>
-                                    <span style={{ width: 32, height: 32, background: `${T.accent}30`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0, border: `1px solid ${T.accent}50` }}>{item.slice(0, 2)}</span>
+                                <li key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, fontWeight: 500, fontSize: 15, color: T.textOnCard }}>
+                                    <span style={{ width: 32, height: 32, background: '#d4af3720', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0, border: `1px solid #d4af3750`, color: '#d4af37' }}>{item.slice(0, 2)}</span>
                                     {item.slice(3)}
                                 </li>
                             ))}
                         </ul>
-                        <button style={{ width: '100%', background: `linear-gradient(135deg,${T.accent},${T.accentSoft})`, color: '#0b2a4a', fontWeight: 900, fontSize: 17, padding: '16px 0', borderRadius: 16, border: 'none', cursor: 'pointer', boxShadow: `0 8px 24px ${T.accent}50` }}>
+                        <button style={{ width: '100%', background: `linear-gradient(135deg, #d4af37 0%, #c9a227 100%)`, color: '#1a1a2e', fontWeight: 900, fontSize: 17, padding: '16px 0', borderRadius: 16, border: 'none', cursor: 'pointer', boxShadow: `0 8px 24px #d4af3740`, position: 'relative', zIndex: 1, transition: 'all 0.3s' }}
+                            onMouseEnter={e => {
+                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                                (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 12px 32px #d4af3750`;
+                            }}
+                            onMouseLeave={e => {
+                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                                (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 24px #d4af3740`;
+                            }}
+                        >
                             Passer à Premium →
                         </button>
                     </div>
 
+                    {/* Features Card */}
                     <div style={card({ padding: '36px 32px', position: 'relative', overflow: 'hidden' })}>
                         <h2 style={{ fontSize: 22, fontWeight: 800, color: T.accent, display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
                             <CheckCircle2 size={24} /> Pourquoi notre plateforme ?

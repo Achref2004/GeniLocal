@@ -11,6 +11,7 @@ import Dashboard from './Dashboard';
 import Profile from './Profile';
 import RaisonnementPage from './RaisonnementPage';
 import ProgressionPage from './ProgressionPage';
+import PlanningPage from './PlanningPage';
 export function AnimatedRoutes() {
   const location = useLocation();
 
@@ -31,6 +32,7 @@ export function AnimatedRoutes() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/raisonnement" element={<RaisonnementPage />} />
           <Route path="/progression" element={<ProgressionPage />} />
+          <Route path="/planning" element={<PlanningPage />} />
         </Routes>
       </AnimatePresence>
     </div>

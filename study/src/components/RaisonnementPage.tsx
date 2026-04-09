@@ -20,7 +20,7 @@ import {
   saveAvatarConfig,
   type AvatarConfig,
 } from '../utils/avatarConfig';
-import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp } from 'lucide-react';
+import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp, Upload, Loader, Eye, EyeOff, X, Check } from 'lucide-react';
 
 // SVG Icons for action cards
 const ResumeIcon = () => (
@@ -61,6 +61,17 @@ export default function RaisonnementPage() {
   const [showAvatarCreator, setShowAvatarCreator] = useState(false);
 
   const controllerRef = useRef<AbortController | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // File upload state
+  const [isExtractingFile, setIsExtractingFile] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(0);
+  const [showOcrReview, setShowOcrReview] = useState(false);
+  const [ocrCleanedText, setOcrCleanedText] = useState('');
+  const [ocrRawText, setOcrRawText] = useState('');
+  const [ocrFilename, setOcrFilename] = useState('');
+  const [showRawText, setShowRawText] = useState(false);
+  const [ocrError, setOcrError] = useState('');
 
   // Extraire les matières uniques de l'historique
   const existingSubjects = useMemo(() => {
@@ -243,6 +254,68 @@ export default function RaisonnementPage() {
   }, []);
 
   const isAnyStreaming = isStreaming || isStreamingQuestion || isStreamingCorrection;
+
+  // ─── File Upload Handler ──────────────────────────────
+
+  const handleFileAttach = useCallback(async (file: File) => {
+    setIsExtractingFile(true);
+    setExtractProgress(0);
+    setOcrError('');
+    setOcrCleanedText('');
+    setOcrRawText('');
+    setOcrFilename(file.name);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // Simulate progress
+    const progressInterval = setInterval(() => {
+      setExtractProgress(p => {
+        if (p >= 85) { clearInterval(progressInterval); return 85; }
+        return p + Math.random() * 12;
+      });
+    }, 400);
+
+    try {
+      const resp = await fetch('http://localhost:8000/api/ocr/extract-text', {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressInterval);
+      setExtractProgress(100);
+
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.error) {
+          setOcrError(data.error);
+        } else {
+          setOcrCleanedText(data.cleaned_text || data.raw_text || '');
+          setOcrRawText(data.raw_text || '');
+          setShowOcrReview(true);
+        }
+      } else {
+        setOcrError('Le serveur OCR n\'est pas disponible. Vérifiez que le backend tourne.');
+      }
+    } catch {
+      setOcrError('Impossible de contacter le serveur. Vérifiez que le backend est lancé sur le port 8000.');
+    } finally {
+      setIsExtractingFile(false);
+      clearInterval(progressInterval);
+    }
+  }, []);
+
+  const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileAttach(file);
+    // Reset input so same file can be re-uploaded
+    e.target.value = '';
+  }, [handleFileAttach]);
+
+  const confirmOcrText = useCallback(() => {
+    setText(ocrCleanedText);
+    setShowOcrReview(false);
+  }, [ocrCleanedText]);
 
   return (
     <div style={{
@@ -608,31 +681,62 @@ export default function RaisonnementPage() {
                   />
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: `1px solid ${T.border}` }}>
-                    <button style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      padding: '12px 24px',
-                      borderRadius: 12,
-                      background: `${T.accent}10`,
-                      border: `1px solid ${T.border}`,
-                      color: T.accent,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.3s',
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}20`;
-                      (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}10`;
-                      (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
-                    }}
-                    >
-                      <Paperclip size={18} style={{ transition: 'transform 0.3s' }} onMouseEnter={(e) => { (e.currentTarget as any).style.transform = 'rotate(12deg)'; }} onMouseLeave={(e) => { (e.currentTarget as any).style.transform = 'rotate(0deg)'; }} />
-                      <span>Joindre un fichier</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg,.docx,.doc,.bmp,.tiff,.webp"
+                        style={{ display: 'none' }}
+                        onChange={handleFileInputChange}
+                      />
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isExtractingFile}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          padding: '12px 24px',
+                          borderRadius: 12,
+                          background: `${T.accent}10`,
+                          border: `1px solid ${T.border}`,
+                          color: T.accent,
+                          fontWeight: 500,
+                          cursor: isExtractingFile ? 'wait' : 'pointer',
+                          transition: 'all 0.3s',
+                          opacity: isExtractingFile ? 0.7 : 1,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isExtractingFile) {
+                            (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}20`;
+                            (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}10`;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
+                        }}
+                      >
+                        {isExtractingFile ? (
+                          <>
+                            <Loader size={18} style={{ animation: 'spin 1s linear infinite' }} />
+                            <span>Extraction... {Math.round(extractProgress)}%</span>
+                          </>
+                        ) : (
+                          <>
+                            <Paperclip size={18} style={{ transition: 'transform 0.3s' }} />
+                            <span>Joindre un fichier</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Error message */}
+                      {ocrError && (
+                        <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 500 }}>
+                          ⚠️ {ocrError}
+                        </span>
+                      )}
+                    </div>
                     <span style={{ fontSize: '0.875rem', fontWeight: 500, color: T.textMuted }}>
                       {text.length > 0 ? `${text.length} caractères` : ''}
                     </span>
@@ -939,8 +1043,198 @@ export default function RaisonnementPage() {
         />
       )}
 
+      {/* OCR Text Review Modal */}
+      {showOcrReview && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 60,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 0, 0, 0.6)',
+          backdropFilter: 'blur(16px)',
+        }}
+          onClick={() => setShowOcrReview(false)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: `linear-gradient(135deg, ${T.card} 0%, ${T.card}80 100%)`,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              width: 680,
+              maxHeight: '85vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 32px 64px rgba(0,0,0,0.4)',
+            }}
+          >
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '20px 24px',
+              borderBottom: `1px solid ${T.border}`,
+              background: `${T.accent}08`,
+              flexShrink: 0,
+            }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileText size={20} color={T.accent} />
+                  Texte extrait du document
+                </h3>
+                <p style={{ fontSize: '0.7rem', color: T.textMuted, margin: '4px 0 0' }}>
+                  📄 {ocrFilename} — Vérifiez et modifiez le texte avant de continuer
+                </p>
+              </div>
+              <button onClick={() => setShowOcrReview(false)} style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: `${T.border}`, border: 'none',
+                color: T.text, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.2)'; e.currentTarget.style.color = '#ef4444'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = T.border; e.currentTarget.style.color = T.text; }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Toggle raw/cleaned */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 24px',
+              borderBottom: `1px solid ${T.border}`,
+              flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{
+                  width: 8, height: 8, borderRadius: '50%',
+                  background: ocrCleanedText !== ocrRawText ? '#10b981' : '#f59e0b',
+                }} />
+                <span style={{ fontSize: '0.75rem', color: T.textMuted, fontWeight: 600 }}>
+                  {ocrCleanedText !== ocrRawText
+                    ? '✅ Texte corrigé par l\'IA — Vous pouvez le modifier'
+                    : '📝 Texte brut (IA non disponible) — Vous pouvez le modifier'
+                  }
+                </span>
+              </div>
+              {ocrCleanedText !== ocrRawText && (
+                <button
+                  onClick={() => setShowRawText(!showRawText)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 10px', borderRadius: 6,
+                    background: 'transparent', border: `1px solid ${T.border}`,
+                    color: T.textMuted, fontSize: '0.65rem', fontWeight: 600,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.color = T.accent; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMuted; }}
+                >
+                  {showRawText ? <EyeOff size={12} /> : <Eye size={12} />}
+                  {showRawText ? 'Voir corrigé' : 'Voir brut'}
+                </button>
+              )}
+            </div>
+
+            {/* Text area */}
+            <div style={{ flex: 1, overflow: 'hidden', padding: '16px 24px' }}>
+              {showRawText ? (
+                <div style={{
+                  width: '100%', height: '100%',
+                  padding: '14px',
+                  borderRadius: 12, border: `1px solid ${T.border}`,
+                  background: `${T.card}60`,
+                  color: T.textMuted,
+                  fontSize: '0.8rem', lineHeight: 1.7,
+                  overflowY: 'auto',
+                  whiteSpace: 'pre-wrap', fontFamily: 'monospace',
+                  boxSizing: 'border-box',
+                  maxHeight: 'calc(85vh - 260px)',
+                }}>
+                  {ocrRawText}
+                </div>
+              ) : (
+                <textarea
+                  value={ocrCleanedText}
+                  onChange={e => setOcrCleanedText(e.target.value)}
+                  style={{
+                    width: '100%', height: '100%',
+                    minHeight: 'calc(85vh - 280px)',
+                    padding: '14px',
+                    borderRadius: 12, border: `1px solid ${T.border}`,
+                    background: `${T.card}60`,
+                    color: T.text,
+                    fontSize: '0.85rem', lineHeight: 1.7,
+                    resize: 'none', outline: 'none',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.3s',
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = T.accent; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = T.border; }}
+                />
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: `1px solid ${T.border}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: '0.7rem', color: T.textMuted }}>
+                {ocrCleanedText.length} caractères
+              </span>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  onClick={() => setShowOcrReview(false)}
+                  style={{
+                    padding: '10px 20px', borderRadius: 10,
+                    background: 'transparent', border: `1px solid ${T.border}`,
+                    color: T.textMuted, fontSize: '0.8rem', fontWeight: 600,
+                    cursor: 'pointer', transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = T.text; e.currentTarget.style.color = T.text; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.color = T.textMuted; }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={confirmOcrText}
+                  disabled={!ocrCleanedText.trim()}
+                  style={{
+                    padding: '10px 24px', borderRadius: 10,
+                    background: ocrCleanedText.trim()
+                      ? `linear-gradient(135deg, ${T.accent}, ${T.accentSoft})`
+                      : T.border,
+                    color: ocrCleanedText.trim() ? (dark ? '#0b2a4a' : '#fff') : T.textMuted,
+                    fontSize: '0.8rem', fontWeight: 800,
+                    border: 'none',
+                    cursor: ocrCleanedText.trim() ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.3s',
+                    boxShadow: ocrCleanedText.trim() ? `0 6px 20px ${T.accent}40` : 'none',
+                    display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                  onMouseEnter={e => { if (ocrCleanedText.trim()) e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                >
+                  <Check size={16} />
+                  Utiliser ce texte
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </div>
   );
