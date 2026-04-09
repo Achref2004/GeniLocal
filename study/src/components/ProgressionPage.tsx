@@ -12,9 +12,15 @@ export default function ProgressionPage() {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   useEffect(() => {
-    const history = loadHistory();
-    const progress = aggregateProgress(history);
-    setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
+    const loadProgressData = () => {
+      const history = loadHistory();
+      const progress = aggregateProgress(history);
+      setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
+    };
+
+    loadProgressData();
+    const interval = setInterval(loadProgressData, 1000); // Refresh toutes les 1s
+    return () => clearInterval(interval);
   }, []);
 
   // Calcul des statistiques globales

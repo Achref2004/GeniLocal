@@ -705,19 +705,19 @@ export default function RaisonnementPage() {
                     onMouseEnter={(e) => {
                       if (!text.trim() || isAnyStreaming) return;
                       (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-12px)';
-                      (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 12px 32px ${T.accentSoft}30`;
+                      (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 12px 32px rgba(6, 187, 42, 0.42)`;
                     }}
                     onMouseLeave={(e) => {
                       (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
                       (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
                     }}
                   >
-                    <div style={{ marginBottom: 24, color: T.accentSoft }}>
+                    <div style={{ marginBottom: 24,  color: '#00830d'}}>
                       <QCMIcon />
                     </div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: 12, color: T.accentSoft }}>QCM</h3>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: 12,  color: '#48ec58' }}>QCM</h3>
                     <p style={{ fontSize: '0.875rem', color: T.textMuted, marginBottom: 24, lineHeight: 1.5, textAlign: 'center' }}>Créez un questionnaire interactif</p>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.accentSoft, fontWeight: 600, fontSize: '0.875rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8,  color: '#09b640', fontWeight: 600, fontSize: '0.875rem' }}>
                       <span>Générer</span>
                       <span style={{ transition: 'transform 0.3s' }}>→</span>
                     </div>
@@ -790,7 +790,7 @@ export default function RaisonnementPage() {
             width: 'calc(100% - 32px)',
           }}>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: T.text, marginBottom: 8 }}>
-              📚 Sélectionnez ou créez une matière
+               Sélectionnez ou créez une matière
             </h3>
             <p style={{ fontSize: '0.875rem', color: T.textMuted, marginBottom: 24 }}>
               Choisissez parmi vos matières existantes ou créez une nouvelle

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTheme } from '../../reutilisable/Themecontext';
-import { fetchStream, detectLanguage } from '../../utils/api_ia';
+import { fetchStream, detectLanguage, saveToHistory } from '../../utils/api_ia';
 import { getMessageCount, incrementMessageCount, canSendMessage, getRemainingMessages, getTimeUntilReset, MAX_MESSAGES_PER_DAY } from '../../utils/chatCounter';
 import { Send, Lock } from 'lucide-react';
 
@@ -28,17 +28,17 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  // Initialiser avec le premier message d'introduction
+  // Initialiser le compteur + message salut
   useEffect(() => {
     setUserMessageCount(getMessageCount());
     if (messages.length === 0) {
-      const intro: ChatMessage = {
+      const salut: ChatMessage = {
         id: Date.now(),
         role: 'assistant',
-        content: `Bonjour! Je suis votre assistant pour discuter de ${subject}. Vous avez ${MAX_MESSAGES_PER_DAY - getMessageCount()} messages disponibles aujourd'hui.`,
+        content: ` Salut khouya! Je suis là pour discuter de ${subject}. Tu peux me poser tes questions!`,
         timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       };
-      setMessages([intro]);
+      setMessages([salut]);
     }
   }, []);
 
@@ -57,7 +57,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
 
     // Vérifier la limite
     if (!canSendMessage()) {
-      alert(`⏳ Limite atteinte! Vous avez utilisé vos ${MAX_MESSAGES_PER_DAY_CONST} messages. Réessayez dans ${getTimeUntilReset()}.`);
+      alert(` Limite atteinte! Vous avez utilisé vos ${MAX_MESSAGES_PER_DAY_CONST} messages. Réessayez dans ${getTimeUntilReset()}.`);
       return;
     }
 
@@ -114,6 +114,14 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         setMessages(prev => prev.map(m =>
           m.id === assistantMessageId ? { ...m, content: fullText } : m
         ));
+        // Sauvegarder dans histoire
+        saveToHistory({
+          mode: 'qr',
+          text: userInput.substring(0, 100),
+          subject,
+          userAnswer: userInput,
+          correction: fullText,
+        });
         onMessagesSent?.([userMessage, { ...assistantMessage, content: fullText }]);
       },
       (err) => {
@@ -170,13 +178,17 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
                   maxWidth: '70%',
                   padding: '12px 16px',
                   borderRadius: msg.role === 'user' ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
-                  background: 'transparent',
+                  background: msg.role === 'user'
+                    ? `${T.accent}15`
+                    : dark
+                    ? '#1a1a2e'
+                    : '#f0f4ff',
                   color: dark
                     ? '#ffffff'
                     : '#001f3f',
                   border: msg.role === 'user'
                     ? `2px solid ${T.accent}`
-                    : '2px solid #f09dfd',
+                    : `2px solid ${dark ? '#9333ea' : '#667eea'}`,
                   fontSize: '1rem',
                   lineHeight: '1.6',
                   boxShadow: `0 4px 12px ${msg.role === 'user' ? T.accent : '#d946ef'}40`,
@@ -191,27 +203,34 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
                     color: dark ? '#ffffff' : '#001f3f',
                   }}>
                     {/* Creative Loading Animation */}
-                    <div style={{ display: 'flex', gap: '4px', alignItems: 'flex-end', height: '16px' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                       {[0, 1, 2].map((i) => (
                         <div
                           key={i}
                           style={{
-                            width: '3px',
-                            height: '100%',
-                            background: `linear-gradient(180deg, ${T.accent} 0%, ${T.accentSoft} 100%)`,
-                            borderRadius: '2px',
-                            animation: `wave 1.2s ease-in-out ${i * 0.1}s infinite`,
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background: `linear-gradient(135deg, ${T.accent}, ${T.accentSoft})`,
+                            animation: `dotPulse 1.4s ease-in-out ${i * 0.2}s infinite`,
+                            boxShadow: `0 0 12px ${T.accent}60`,
                           }}
                         />
                       ))}
                       <style>{`
-                        @keyframes wave {
-                          0%, 100% { height: 4px; opacity: 0.5; }
-                          50% { height: 14px; opacity: 1; }
+                        @keyframes dotPulse {
+                          0%, 100% {
+                            opacity: 0.3;
+                            transform: scale(0.8);
+                          }
+                          50% {
+                            opacity: 1;
+                            transform: scale(1.2);
+                          }
                         }
                       `}</style>
                     </div>
-                    <span style={{ fontSize: '1rem', fontStyle: 'italic' }}>Professeur réfléchit...</span>
+                    <span style={{ fontSize: '0.95rem', fontStyle: 'italic', opacity: 0.8 }}>Réponse en cours...</span>
                   </div>
                 ) : (
                   <>
@@ -249,7 +268,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
              Vous avez utilisé vos 20 messages. Réessayez dans {getTimeUntilReset()}
           </p>
           <div style={{
-            background: `linear-gradient(135deg, ${T.accent} 0%, ${T.accentSoft} 100%)`,
+            background: `linear-gradient(135deg, ${'#ef4444'} 0%, ${'#f77f7f'} 100%)`,
             padding: '12px',
             borderRadius: '8px',
             color: dark ? '#ffffff' : '#ffffff',
@@ -285,7 +304,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         }}>
           <span> Messages: {MAX_MESSAGES_PER_DAY_CONST - userMessageCount} restants</span>
           <span style={{ color: remainingMessages <= 5 ? '#ef4444' : T.accent }}>
-            {remainingMessages <= 5 && '⚠️ '}{remainingMessages <= 5 ? 'Bientôt limité' : 'Dans les limites'}
+            {remainingMessages <= 5 && ' '}{remainingMessages <= 5 ? 'Bientôt limité' : 'Dans les limites'}
           </span>
         </div>
       )}
