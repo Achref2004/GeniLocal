@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+study_backend/__pycache__/
+study_backend/*.pyc
+*.egg-info/
+
+# Build & Distribution
+build/
+dist/
+*.exe
+*.dmg
+*.appimage
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Cache
+.cache/
+.eslintcache
+
+# Database
+*.db
+*.sqlite
