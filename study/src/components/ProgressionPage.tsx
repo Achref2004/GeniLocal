@@ -12,8 +12,8 @@ export default function ProgressionPage() {
   const [hoveredRow, setHoveredRow] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadProgressData = () => {
-      const history = loadHistory();
+    const loadProgressData = async () => {
+      const history = await loadHistory();
       const progress = aggregateProgress(history);
       setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
     };

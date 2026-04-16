@@ -1,10 +1,19 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
 
-# Format : mysql+pymysql://utilisateur:motdepasse@localhost/nom_de_la_base
-SQLALCHEMY_DATABASE_URL = "mysql+pymysql://root:@localhost/study_db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
+# SQLite Database Configuration
+DB_PATH = os.path.join(os.path.dirname(__file__), 'study_app.db')
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH.replace(chr(92), '/')}"
+
+# For SQLite, we need to add some special arguments
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    echo=False  # Set to True for SQL debugging
+)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

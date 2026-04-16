@@ -12,7 +12,7 @@ import {
   NOTE_TYPE_CONFIG, CATEGORY_CONFIG,
   loadNotes, saveNote, deleteNote, toggleNoteChecked,
   loadEvents, saveEvent, saveBulkEvents, deleteEvent,
-  getNotesForDate, getEventsForDate, getRaisonnementForDate,
+  getNotesForDate, getEventsForDate, getRaisonnementForDate, loadIAHistory,
   getMonthStats, formatDateKey,
   getDaysInMonth, getFirstDayOfMonth, MONTH_NAMES, DAY_NAMES,
 } from '../utils/planningStorage';
@@ -34,8 +34,15 @@ export default function PlanningPage() {
   const [slideKey, setSlideKey] = useState(0);
 
   // Data State
-  const [notes, setNotes] = useState<PlanningNote[]>(loadNotes());
-  const [events, setEvents] = useState<PlanningEvent[]>(loadEvents());
+  const [notes, setNotes] = useState<PlanningNote[]>([]);
+  const [events, setEvents] = useState<PlanningEvent[]>([]);
+  const [iaHistory, setIaHistory] = useState<RaisonnementHistoryItem[]>([]);
+
+  useEffect(() => {
+    loadNotes().then(setNotes);
+    loadEvents().then(setEvents);
+    loadIAHistory().then(setIaHistory);
+  }, []);
 
   // UI State
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -94,7 +101,18 @@ export default function PlanningPage() {
 
   // ─── Stats ──────────────────────────────────────────────
 
-  const stats = useMemo(() => getMonthStats(currentMonth, currentYear), [currentMonth, currentYear, notes, events]);
+  const [stats, setStats] = useState({
+    studiedDays: 0,
+    resumeCount: 0,
+    quizCount: 0,
+    objectifsTotal: 0,
+    objectifsCompleted: 0,
+    totalNotes: 0,
+  });
+
+  useEffect(() => {
+    getMonthStats(currentMonth, currentYear).then(setStats);
+  }, [currentMonth, currentYear, notes, events]);
 
   // ─── Calendar Data ──────────────────────────────────────
 
@@ -140,7 +158,6 @@ export default function PlanningPage() {
     return cells;
   }, [currentMonth, currentYear]);
 
-  // Get dots for a date (categories present)
   const getDotsForDate = useCallback((dateKey: string): EventCategory[] => {
     const dayNotes = notes.filter(n => n.date === dateKey);
     const dayEvents = events.filter(e => e.date === dateKey);
@@ -148,10 +165,14 @@ export default function PlanningPage() {
     dayNotes.forEach(n => cats.add(n.category));
     dayEvents.forEach(e => cats.add(e.category));
     // Check IA history  
-    const iaItems = getRaisonnementForDate(dateKey);
+    const iaItems = iaHistory.filter(item => {
+      if (!item.timestamp) return false;
+      const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
+      return itemDate === dateKey;
+    });
     if (iaItems.length > 0) cats.add('etude');
     return Array.from(cats);
-  }, [notes, events]);
+  }, [notes, events, iaHistory]);
 
   const todayKey = formatDateKey(today);
 
@@ -166,9 +187,9 @@ export default function PlanningPage() {
     setShowNoteEditor(false);
   }, []);
 
-  const handleSaveNote = useCallback(() => {
+  const handleSaveNote = useCallback(async () => {
     if (!noteTitle.trim() || !selectedDate) return;
-    const updated = saveNote({
+    const updated = await saveNote({
       date: selectedDate,
       type: noteType,
       title: noteTitle.trim(),
@@ -181,13 +202,13 @@ export default function PlanningPage() {
     resetNoteEditor();
   }, [selectedDate, noteType, noteTitle, noteContent, noteSubject, noteCategory, resetNoteEditor]);
 
-  const handleDeleteNote = useCallback((id: string) => {
-    const updated = deleteNote(id);
+  const handleDeleteNote = useCallback(async (id: string) => {
+    const updated = await deleteNote(id);
     setNotes(updated);
   }, []);
 
-  const handleToggleChecked = useCallback((id: string) => {
-    const updated = toggleNoteChecked(id);
+  const handleToggleChecked = useCallback(async (id: string) => {
+    const updated = await toggleNoteChecked(id);
     setNotes(updated);
   }, []);
 
@@ -295,13 +316,13 @@ export default function PlanningPage() {
     setOcrItems(prev => prev.filter(item => item.id !== id));
   }, []);
 
-  const confirmOcrImport = useCallback(() => {
+  const confirmOcrImport = useCallback(async () => {
     // Only import items that have a valid date
     const validItems = ocrItems.filter(item => item.date && /^\d{4}-\d{2}-\d{2}$/.test(item.date));
     let updatedNotes = notes;
 
     for (const item of validItems) {
-      updatedNotes = saveNote({
+      updatedNotes = await saveNote({
         date: item.date,
         type: 'devoir',
         title: item.title,
@@ -349,8 +370,12 @@ export default function PlanningPage() {
 
   const selectedDateIA = useMemo((): RaisonnementHistoryItem[] => {
     if (!selectedDate) return [];
-    return getRaisonnementForDate(selectedDate);
-  }, [selectedDate]);
+    return iaHistory.filter(item => {
+      if (!item.timestamp) return false;
+      const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
+      return itemDate === selectedDate;
+    });
+  }, [selectedDate, iaHistory]);
 
   // ─── Existing subjects for autocomplete ─────────────────
 
@@ -358,15 +383,9 @@ export default function PlanningPage() {
     const subs = new Set<string>();
     notes.forEach(n => { if (n.subject) subs.add(n.subject); });
     // Also from IA history
-    try {
-      const iaData = localStorage.getItem('study_ia_history');
-      if (iaData) {
-        const items = JSON.parse(iaData);
-        items.forEach((i: any) => { if (i.subject) subs.add(i.subject); });
-      }
-    } catch { /* ignore */ }
+    iaHistory.forEach(h => { if (h.subject) subs.add(h.subject); });
     return Array.from(subs);
-  }, [notes]);
+  }, [notes, iaHistory]);
 
   // ─── Format helpers ─────────────────────────────────────
 
@@ -944,8 +963,8 @@ export default function PlanningPage() {
                             OCR
                           </span>
                         )}
-                        <button onClick={() => {
-                          const updated = deleteEvent(evt.id);
+                        <button onClick={async () => {
+                          const updated = await deleteEvent(evt.id);
                           setEvents(updated);
                         }} style={{
                           background: 'transparent', border: 'none',

@@ -18,6 +18,8 @@ const Profile: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [saved, setSaved] = useState(false);
     const [error, setError] = useState('');
+    const [stats, setStats] = useState<{ badges: string } | null>(null);
+    const [badgeList, setBadgeList] = useState<string[]>([]);
     const [formData, setFormData] = useState({
         fullname: '', email: '', phone: '',
         birthdate: '', institution: '', region: '', level: 'Licence 3', objective: '',
@@ -39,6 +41,24 @@ const Profile: React.FC = () => {
             });
         }).catch((e: any) => { if (e.response?.status === 401) navigate('/login'); });
     }, [token, navigate]);
+
+    useEffect(() => {
+        if (!token) return;
+        axios.get('http://127.0.0.1:8000/users/me/stats', {
+            headers: { Authorization: `Bearer ${token}` },
+        }).then(res => {
+            setStats(res.data);
+            try {
+                const parsed = JSON.parse(res.data.badges || '[]');
+                setBadgeList(Array.isArray(parsed) ? parsed.map(String) : [String(parsed)]);
+            } catch (_e) {
+                setBadgeList(res.data.badges ? [res.data.badges] : []);
+            }
+        }).catch(() => {
+            setStats(null);
+            setBadgeList([]);
+        });
+    }, [token]);
 
     const handleSave = async () => {
         setLoading(true); setError(''); setSaved(false);
@@ -108,7 +128,8 @@ const Profile: React.FC = () => {
             transition: 'background .4s, color .4s',
         }}>
 
-            <style>{`
+            <style>
+                {`
                 @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800;900&display=swap');
                 @keyframes twinkle { 0%,100%{opacity:.1;transform:scale(.8)} 50%{opacity:1;transform:scale(1.4)} }
                 @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
@@ -266,23 +287,70 @@ const Profile: React.FC = () => {
                                 animation: 'fadeSlideUp .5s .2s ease both', opacity: 0, animationFillMode: 'forwards',
                             }}>
                                 <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: T.textOnCardMuted, fontWeight: 700, marginBottom: 20 }}>
-                                    📈 Mes performances
+                                    🏅 Badges obtenus
                                 </p>
-                                {[
-                                    { icon: '📚', label: 'Cours suivis', value: '8' },
-                                    { icon: '⏱️', label: 'Heures totales', value: '127h' },
-                                    { icon: '🏆', label: 'Score moyen QCM', value: '84%' },
-                                ].map(({ icon, label, value }) => (
-                                    <div key={label} style={{
-                                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                        padding: '13px 16px', background: T.statBg,
-                                        borderRadius: 14, marginBottom: 10, fontSize: 14,
-                                        border: `1px solid ${T.cardBorder}`,
-                                    }}>
-                                        <span style={{ color: T.textOnCardMuted, display: 'flex', alignItems: 'center', gap: 8 }}>{icon} {label}</span>
-                                        <b style={{ color: T.accent, fontSize: 16 }}>{value}</b>
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+                                    <div>
+                                        <h3 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: T.textOnCard }}>{badgeList.length}</h3>
+                                        <p style={{ margin: '6px 0 0', color: T.textOnCardMuted, fontSize: 14 }}>badge{badgeList.length > 1 ? 's' : ''} débloqué{badgeList.length > 1 ? 's' : ''}</p>
                                     </div>
-                                ))}
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 54, height: 54, borderRadius: 18, background: T.accent, color: '#fff', fontSize: 24, fontWeight: 800, boxShadow: `0 12px 30px ${T.accent}40` }}>
+                                        ✨
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'grid', gap: 12 }}>
+                                    {[
+                                        {
+                                            title: 'Premier utilisation',
+                                            description: 'Débloqué dès votre première action sur la plateforme.',
+                                            unlocked: badgeList.includes('Premier utilisation'),
+                                        },
+                                        {
+                                            title: '+5 matières ajoutées',
+                                            description: 'Ajoutez cinq matières différentes pour débloquer ce badge.',
+                                            unlocked: badgeList.includes('+5 matières ajoutées'),
+                                        },
+                                    ].map(item => (
+                                        <div key={item.title} style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '16px 18px', background: dark ? '#08101a' : '#f8fafc', borderRadius: 18,
+                                            border: `1px solid ${item.unlocked ? T.accent : T.cardBorder}`,
+                                        }}>
+                                            <div>
+                                                <p style={{ margin: 0, fontWeight: 700, color: T.textOnCard }}>{item.title}</p>
+                                                <p style={{ margin: '6px 0 0', color: T.textOnCardMuted, fontSize: 13 }}>{item.description}</p>
+                                            </div>
+                                            <span style={{
+                                                minWidth: 84,
+                                                padding: '8px 10px',
+                                                borderRadius: 999,
+                                                textAlign: 'center',
+                                                background: item.unlocked ? T.accent : T.card,
+                                                color: item.unlocked ? '#0b1720' : T.textOnCardMuted,
+                                                fontWeight: 700,
+                                                fontSize: 12,
+                                            }}>
+                                                {item.unlocked ? 'Débloqué' : 'À débloquer'}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div style={{ marginTop: 24, display: 'grid', gap: 10 }}>
+                                    {badgeList.length > 0 ? badgeList.map((badge, index) => (
+                                        <div key={`${badge}-${index}`} style={{
+                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                            padding: '12px 14px', background: T.statBg, borderRadius: 14,
+                                            border: `1px solid ${T.cardBorder}`,
+                                        }}>
+                                            <span style={{ color: T.textOnCardMuted }}>{badge}</span>
+                                            <span style={{ color: T.accent, fontWeight: 700 }}>✓</span>
+                                        </div>
+                                    )) : (
+                                        <p style={{ margin: 0, color: T.textOnCardMuted, fontSize: 14 }}>Aucun badge pour le moment. Utilisez l'IA, ajoutez plus de matières et débloquez vos premiers trophées !</p>
+                                    )}
+                                </div>
                             </div>
                         </div>
 

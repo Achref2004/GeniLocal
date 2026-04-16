@@ -1,6 +1,7 @@
 {
   "name": "pfe-study",
   "version": "1.0.0",
+  "type": "module",
   "description": "PFE Study - Learning Platform Desktop Application",
   "main": "electron/main.js",
   "homepage": "./",

@@ -55,14 +55,36 @@ export const getRandomConfig = (): AvatarConfig => {
   };
 };
 
-export function saveAvatarConfig(config: AvatarConfig) {
-  try { localStorage.setItem(AVATAR_KEY, JSON.stringify(config)); } catch (e) { console.warn(e); }
+export async function saveAvatarConfig(config: AvatarConfig): Promise<void> {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    await fetch('http://localhost:8000/api/avatar', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(config)
+    });
+  } catch (e) {
+    console.warn("Failed to save avatar to db", e);
+  }
 }
 
-export function loadAvatarConfig(): AvatarConfig {
+export async function loadAvatarConfig(): Promise<AvatarConfig> {
   try {
-    const data = localStorage.getItem(AVATAR_KEY);
-    if (data) return { ...getDefaultConfig(), ...JSON.parse(data) };
-  } catch (e) { console.warn(e); }
+    const token = localStorage.getItem('token');
+    if (!token) return getDefaultConfig();
+    const res = await fetch('http://localhost:8000/api/avatar', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return { ...getDefaultConfig(), ...data };
+    }
+  } catch (e) {
+    console.warn("Failed to load avatar from db, using default", e);
+  }
   return getDefaultConfig();
 }

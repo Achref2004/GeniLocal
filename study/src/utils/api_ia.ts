@@ -220,30 +220,70 @@ L'étudiant commence par: "${user_answer}"
 Saluez-le chaleureusement et commencez une discussion naturelle. Répondez UNIQUEMENT en FRANÇAIS.`;
 
 
-    case 'qr_correct':
-      const nicknames = ['mon amis', 'mon cherie', 'sweety', 'mon petit', 'mon cher','5ouya' ,'mon chouchou', 'ma chère'];
+    case 'qr_correct': {
+      const nicknames = ['mon ami', 'mon cher', 'sweety', 'mon petit', 'mon cher', '5ouya', 'mon chouchou', 'ma chère'];
       const randomNick = nicknames[Math.floor(Math.random() * nicknames.length)];
-      const isFirstMessage = !conversationHistory || conversationHistory.trim().split('\n').filter(l => l.startsWith('Étudiant:')).length === 1;
+      const isFirstMessage = !conversationHistory || conversationHistory.trim().split('\n').filter(l => l.startsWith('Étudiant:') || l.startsWith('Student:') || l.startsWith('طالب:')).length <= 1;
 
-      // Optimiser: prompt plus court pour vitesse
-      if (isFirstMessage) {
-        return `Tu es un professeur expert et bienveillant EN FRANÇAIS. Salue l'étudiant avec "Bonjour ${randomNick}!" et commence à discuter du sujet: "${subject}".
+      if (lang === 'en') {
+        if (isFirstMessage) {
+          return `You are a kind, expert teacher. Say "Hello ${randomNick}!" and start a conversation about "${subject}".
 
-Sois clair, amical, pédagogique. Réponds UNIQUEMENT en FRANÇAIS. Ne sois pas trop formel.
+Be clear, friendly, and helpful. Answer ONLY in ENGLISH, and keep the tone natural.
 
-Étudiant: ${user_answer}
+Student: ${user_answer}
 
-Ta réponse EN FRANÇAIS:`;
-      }
+Your answer in ENGLISH:`;
+        }
+        return `You are a kind, expert teacher. Discuss the subject: "${subject}".
 
-      return `Tu es un professeur expert et bienveillant EN FRANÇAIS. Discute du sujet: "${subject}".
-
-Historique récent:
+Recent conversation:
 ${conversationHistory}
 
-Étudiant: ${user_answer}
+Student: ${user_answer}
 
-Réponds UNIQUEMENT en FRANÇAIS à ce message:`;
+Answer ONLY in ENGLISH to this message:`;
+      }
+
+      if (lang === 'ar') {
+        if (isFirstMessage) {
+          return `أنت معلم خبير وودود. قل "مرحباً ${randomNick}!" وابدأ حديثاً حول "${subject}".
+
+كن واضحاً، ودوداً، ومساعداً. أجب باللغة العربية فقط.
+
+الطالب: ${user_answer}
+
+إجابتك باللغة العربية:`;
+        }
+        return `أنت معلم خبير وودود. ناقش الموضوع: "${subject}".
+
+المحادثة الأخيرة:
+${conversationHistory}
+
+الطالب: ${user_answer}
+
+أجب باللغة العربية فقط على هذه الرسالة:`;
+      }
+
+      if (isFirstMessage) {
+        return `Tu es un professeur expert et bienveillant. Dis "Bonjour ${randomNick}!" et commence à discuter du sujet : "${subject}".
+
+Sois clair, amical et pédagogique. Réponds UNIQUEMENT en FRANÇAIS.
+
+Étudiant : ${user_answer}
+
+Ta réponse EN FRANÇAIS :`;
+      }
+
+      return `Tu es un professeur expert et bienveillant. Discute du sujet : "${subject}".
+
+Historique récent :
+${conversationHistory}
+
+Étudiant : ${user_answer}
+
+Réponds UNIQUEMENT en FRANÇAIS à ce message :`;
+    }
 
 
     default:
@@ -255,7 +295,7 @@ Réponds UNIQUEMENT en FRANÇAIS à ce message:`;
  * Stream response from Ollama (local, hors ligne)
  */
 function fetchStreamOllama(
-  { mode, text, subject = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
+  { mode, text, subject = '', question = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; question?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
@@ -320,33 +360,111 @@ function fetchStreamOllama(
 
 /**
  * Stream a response from the IA backend
- * Utilise Ollama (hors ligne) en priorité, fallback sur backend si disponible
+ * 1. Try backend first (checks DB cache — instant if already generated)
+ * 2. Fallback to Ollama local streaming
+ * 3. Fallback to backend streaming
  */
 export function fetchStream(
-  { mode, text, subject = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
+  { mode, text, subject = '', question = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; question?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
 ): AbortController {
-  // Essaie Ollama d'abord (hors ligne)
+  const controller = new AbortController();
+
+  // Cacheable modes: résumé, QCM, qr_question (not chat/correction)
+  const cacheableModes = ['resume', 'qcm', 'qr_question', 'qcm_remedial'];
+  const isCacheable = cacheableModes.includes(mode) && !user_answer;
+
+  if (isCacheable) {
+    // Try backend first — it checks the DB cache and returns JSON instantly on hit
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    fetch(`${API_BASE}/generate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+        const contentType = response.headers.get('content-type') || '';
+
+        if (contentType.includes('application/json')) {
+          // ✅ CACHE HIT — backend returned JSON directly
+          const data = await response.json();
+          if (data.cached && data.full_text) {
+            console.log('⚡ Cache HIT — affichage instantané');
+            // Simulate a quick "typing" effect for UX
+            onToken(data.full_text, data.full_text);
+            onDone(data.full_text);
+            return;
+          }
+        }
+
+        // CACHE MISS — backend is streaming SSE, parse normally
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const eventData = JSON.parse(line.slice(6));
+                if (eventData.token) {
+                  fullText += eventData.token;
+                  onToken(eventData.token, fullText);
+                }
+                if (eventData.done && eventData.full_text) {
+                  onDone(eventData.full_text);
+                  return;
+                }
+              } catch (_e) { /* skip */ }
+            }
+          }
+        }
+        onDone(fullText);
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') return;
+        console.warn('⚠️ Backend cache/stream failed, trying Ollama...', err.message);
+        // Fallback: try Ollama directly
+        fetchStreamOllama({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, onError);
+      });
+
+    return controller;
+  }
+
+  // Non-cacheable modes: use Ollama directly
   if (USE_OLLAMA) {
     console.log('🔄 Utilisation de Ollama (hors ligne)');
-    return fetchStreamOllama({ mode, text, subject, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, (err) => {
+    return fetchStreamOllama({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, (err) => {
       console.warn('⚠️ Ollama indisponible, tentative backend...', err.message);
-      // Fallback sur backend si Ollama échoue
-      return fetchStreamBackend({ mode, text, subject, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, onError);
+      return fetchStreamBackend({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, onError);
     });
   }
 
   // Fallback sur backend
-  return fetchStreamBackend({ mode, text, subject, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, onError);
+  return fetchStreamBackend({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }, onToken, onDone, onError);
 }
 
 /**
  * Connexion au backend distant (pour authentification et fallback)
  */
 function fetchStreamBackend(
-  { mode, text, subject = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
+  { mode, text, subject = '', question = '', user_answer = '', wrongTopics = '', conversationHistory = '', language = '' }: { mode: string; text: string; subject?: string; question?: string; user_answer?: string; wrongTopics?: string; conversationHistory?: string; language?: string },
   onToken: (token: string, fullText: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: Error) => void
@@ -356,7 +474,7 @@ function fetchStreamBackend(
   fetch(`${API_BASE}/generate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ mode, text, subject, user_answer, wrongTopics, conversationHistory, language }),
+    body: JSON.stringify({ mode, text, subject, question, user_answer, wrongTopics, conversationHistory, language }),
     signal: controller.signal,
   })
     .then(async (response) => {
@@ -422,47 +540,39 @@ export interface HistoryItem {
   correction?: string;
 }
 
-export function loadHistory(): HistoryItem[] {
+export async function loadHistory(): Promise<HistoryItem[]> {
   try {
-    const data = localStorage.getItem(HISTORY_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>): HistoryItem[] {
-  const history = loadHistory();
-  const newEntry: HistoryItem = {
-    ...entry,
-    id: Date.now(),
-    timestamp: new Date().toISOString(),
-  };
-
-  history.unshift(newEntry);
-  if (history.length > MAX_HISTORY) history.pop();
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-
-  // Save to SQLite database asynchronously
-  saveToDatabaseAsync(newEntry).catch(err =>
-    console.warn('⚠️ Failed to save to database:', err)
-  );
-
-  return history;
-}
-
-/**
- * Save IA history entry to SQLite database via API
- */
-async function saveToDatabaseAsync(entry: HistoryItem): Promise<void> {
-  try {
-    const token = localStorage.getItem('access_token');
-    if (!token) {
-      console.warn('⚠️ No auth token, skipping database save');
-      return;
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // Map backend field names to frontend HistoryItem
+      return data.map((item: any) => ({
+        id: item.id,
+        timestamp: item.timestamp,
+        mode: item.mode,
+        text: item.input_text || item.text || '',
+        subject: item.subject || '',
+        result: item.result || '',
+        question: item.question || '',
+        userAnswer: item.user_answer || item.userAnswer || '',
+        correction: item.correction || '',
+      }));
     }
+  } catch (err) {
+    console.warn("Failed to load history from db", err);
+  }
+  return [];
+}
 
-    const response = await fetch(`${API_BASE}/ia-history`, {
+export async function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>): Promise<HistoryItem[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    await fetch(`${API_BASE}/history`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -476,25 +586,25 @@ async function saveToDatabaseAsync(entry: HistoryItem): Promise<void> {
         question: entry.question,
         user_answer: entry.userAnswer,
         correction: entry.correction,
-        metadata: {
-          saved_from: 'frontend',
-          timestamp: entry.timestamp
-        }
       })
     });
-
-    if (!response.ok) {
-      throw new Error(`Database save failed: ${response.status}`);
-    }
-
-    console.log('✅ IA history saved to database');
   } catch (err) {
-    console.error('❌ Error saving to database:', err);
-    // Silently fail - localStorage is available anyway
+    console.error('❌ Error saving history to database:', err);
   }
+  return await loadHistory();
 }
 
-export function clearHistory(): HistoryItem[] {
-  localStorage.removeItem(HISTORY_KEY);
+export async function clearHistory(): Promise<HistoryItem[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      await fetch(`${API_BASE}/history`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  } catch (e) {
+    console.warn("Error clearing history", e);
+  }
   return [];
 }

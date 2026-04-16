@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../reutilisable/Themecontext';
 import ResumeView from './ia/ResumeView';
@@ -18,6 +18,7 @@ import {
 import {
   loadAvatarConfig,
   saveAvatarConfig,
+  getDefaultConfig,
   type AvatarConfig,
 } from '../utils/avatarConfig';
 import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp, Upload, Loader, Eye, EyeOff, X, Check } from 'lucide-react';
@@ -56,8 +57,13 @@ export default function RaisonnementPage() {
   const [isStreamingCorrection, setIsStreamingCorrection] = useState(false);
   const [remedialWrongTopics, setRemedialWrongTopics] = useState('');
 
-  const [history, setHistory] = useState<HistoryItem[]>(loadHistory());
-  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(loadAvatarConfig());
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(getDefaultConfig());
+
+  useEffect(() => {
+    loadHistory().then(setHistory);
+    loadAvatarConfig().then(setAvatarConfig);
+  }, []);
   const [showAvatarCreator, setShowAvatarCreator] = useState(false);
 
   const controllerRef = useRef<AbortController | null>(null);
@@ -84,6 +90,9 @@ export default function RaisonnementPage() {
       controllerRef.current.abort();
       controllerRef.current = null;
     }
+    setIsStreaming(false);
+    setIsStreamingQuestion(false);
+    setIsStreamingCorrection(false);
   }, []);
 
   const resetResults = useCallback(() => {
@@ -91,11 +100,8 @@ export default function RaisonnementPage() {
     setStreamContent('');
     setRawQcmContent('');
     setRawRemedialContent('');
-    setIsStreaming(false);
     setQrQuestion('');
     setQrCorrection('');
-    setIsStreamingQuestion(false);
-    setIsStreamingCorrection(false);
   }, [cancelStream]);
 
   const handleResume = useCallback(() => {
@@ -115,10 +121,10 @@ export default function RaisonnementPage() {
     controllerRef.current = fetchStream(
       { mode: 'resume', text, subject, language: detectLanguage(text) },
       (_token, fullText) => setStreamContent(fullText),
-      (fullText) => {
+      async (fullText) => {
         setIsStreaming(false);
         setStreamContent(fullText);
-        const newHistory = saveToHistory({ mode: 'resume', text: text.substring(0, 200), subject, result: fullText });
+        const newHistory = await saveToHistory({ mode: 'resume', text: text.substring(0, 200), subject, result: fullText });
         setHistory(newHistory);
       },
       (err) => {
@@ -145,10 +151,10 @@ export default function RaisonnementPage() {
     controllerRef.current = fetchStream(
       { mode: 'qcm', text, subject, language: detectLanguage(text) },
       (_token, fullText) => setRawQcmContent(fullText),
-      (fullText) => {
+      async (fullText) => {
         setIsStreaming(false);
         setRawQcmContent(fullText);
-        const newHistory = saveToHistory({ mode: 'qcm', text: text.substring(0, 200), subject, result: fullText });
+        const newHistory = await saveToHistory({ mode: 'qcm', text: text.substring(0, 200), subject, result: fullText });
         setHistory(newHistory);
       },
       (err) => {
@@ -173,7 +179,7 @@ export default function RaisonnementPage() {
     setIsStreamingQuestion(true);
 
     controllerRef.current = fetchStream(
-      { mode: 'qr_question', text, subject },
+      { mode: 'qr_question', text, subject, language: detectLanguage(text) },
       (_token, fullText) => setQrQuestion(fullText),
       (fullText) => {
         setIsStreamingQuestion(false);
@@ -189,12 +195,12 @@ export default function RaisonnementPage() {
   const handleQrAnswer = useCallback((userAnswer: string) => {
     setIsStreamingCorrection(true);
     controllerRef.current = fetchStream(
-      { mode: 'qr_correct', text, user_answer: userAnswer },
+      { mode: 'qr_correct', text, user_answer: userAnswer, question: qrQuestion, subject, language: detectLanguage(text) },
       (_token, fullText) => setQrCorrection(fullText),
-      (fullText) => {
+      async (fullText) => {
         setIsStreamingCorrection(false);
         setQrCorrection(fullText);
-        const newHistory = saveToHistory({
+        const newHistory = await saveToHistory({
           mode: 'qr',
           text: text.substring(0, 200),
           question: qrQuestion,
@@ -220,10 +226,10 @@ export default function RaisonnementPage() {
     controllerRef.current = fetchStream(
       { mode: 'qcm_remedial', text, wrongTopics: topics, language: detectLanguage(text) },
       (_token, fullText) => setRawRemedialContent(fullText),
-      (fullText) => {
+      async (fullText) => {
         setIsStreaming(false);
         setRawRemedialContent(fullText);
-        const newHistory = saveToHistory({
+        const newHistory = await saveToHistory({
           mode: 'qcm_remedial',
           text: text.substring(0, 200),
           result: fullText
@@ -237,19 +243,35 @@ export default function RaisonnementPage() {
     );
   }, [text]);
 
-  const handleHistorySelect = useCallback((item: HistoryItem) => {
+  const handleHistorySelect = useCallback(async (item: HistoryItem) => {
     setText(item.text || '');
     if (item.subject) setSubject(item.subject);
+
+    // If the item has a result, display it directly without re-generating
+    if (item.result) {
+      resetResults();
+      if (item.mode === 'resume') {
+        setActiveMode('resume');
+        setStreamContent(item.result);
+      } else if (item.mode === 'qcm' || item.mode === 'qcm_remedial') {
+        setActiveMode(item.mode as any);
+        setRawQcmContent(item.result);
+      } else if (item.mode === 'qr') {
+        setActiveMode('qr');
+        if (item.question) setQrQuestion(item.question);
+        if (item.correction) setQrCorrection(item.correction);
+      }
+    }
+  }, [resetResults]);
+
+  const handleClearHistory = useCallback(async () => {
+    const updated = await clearHistory();
+    setHistory(updated);
   }, []);
 
-  const handleClearHistory = useCallback(() => {
-    clearHistory();
-    setHistory([]);
-  }, []);
-
-  const handleAvatarSave = useCallback((newConfig: AvatarConfig) => {
+  const handleAvatarSave = useCallback(async (newConfig: AvatarConfig) => {
     setAvatarConfig(newConfig);
-    saveAvatarConfig(newConfig);
+    await saveAvatarConfig(newConfig);
     setShowAvatarCreator(false);
   }, []);
 
@@ -575,13 +597,14 @@ export default function RaisonnementPage() {
           {/* Results area - show when active mode */}
           {activeMode ? (
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', minHeight: '100%' }}>
-              {activeMode === 'resume' && (
+                {activeMode === 'resume' && (
                 <div style={{ width: '100%', padding: '48px', margin: '0 auto' }}>
                   <ResumeView
                     content={streamContent}
                     isStreaming={isStreaming}
                     subject={subject}
                     avatarConfig={avatarConfig}
+                    onStop={cancelStream}
                   />
                 </div>
               )}

@@ -14,21 +14,44 @@ let mainWindow;
 let backendProcess;
 let backendReady = false;
 let backendStartTime = null;
+let backendRetryCount = 0;
 
 // Backend configuration
 const BACKEND_PORT = 8000;
 const BACKEND_HOST = '127.0.0.1';
 const BACKEND_URL = `http://${BACKEND_HOST}:${BACKEND_PORT}`;
 const BACKEND_TIMEOUT = 30000; // 30 seconds
-const BACKEND_RESTART_DELAY = 2000; // 2 seconds
+const BACKEND_RESTART_DELAY = 3000; // 3 seconds
+const MAX_BACKEND_RETRIES = 3;
 
 /**
  * Start Python FastAPI backend
  */
-function startBackend() {
-  console.log('[DESKTOP] Starting backend...');
+function killExistingOnPort(port) {
+  return new Promise((resolve) => {
+    if (process.platform === 'win32') {
+      const findCmd = spawn('cmd', ['/c', `for /f "tokens=5" %a in ('netstat -ano ^| findstr :${port} ^| findstr LISTENING') do taskkill /PID %a /F`], { stdio: 'ignore', shell: true });
+      findCmd.on('close', () => resolve());
+      findCmd.on('error', () => resolve());
+      setTimeout(() => resolve(), 3000);
+    } else {
+      const findCmd = spawn('sh', ['-c', `lsof -ti :${port} | xargs kill -9 2>/dev/null`], { stdio: 'ignore' });
+      findCmd.on('close', () => resolve());
+      findCmd.on('error', () => resolve());
+      setTimeout(() => resolve(), 3000);
+    }
+  });
+}
+
+async function startBackend() {
+  console.log(`[DESKTOP] Starting backend... (attempt ${backendRetryCount + 1}/${MAX_BACKEND_RETRIES})`);
   backendReady = false;
   backendStartTime = Date.now();
+
+  // Kill any existing process on the port
+  await killExistingOnPort(BACKEND_PORT);
+  // Small delay after kill to let the port free up
+  await new Promise(r => setTimeout(r, 500));
 
   const backendPath = path.join(__dirname, '../study_backend');
   const pythonScript = path.join(backendPath, 'main.py');
@@ -95,18 +118,30 @@ function startBackend() {
  */
 function handleBackendError() {
   backendReady = false;
+  backendRetryCount++;
+
+  if (backendRetryCount >= MAX_BACKEND_RETRIES) {
+    console.error(`[DESKTOP] Backend failed after ${MAX_BACKEND_RETRIES} attempts. Giving up.`);
+    if (mainWindow) {
+      mainWindow.webContents.send('backend-status', {
+        status: 'error',
+        message: `Backend failed to start after ${MAX_BACKEND_RETRIES} attempts. Please check that Python and required packages are installed, and that port ${BACKEND_PORT} is free.`
+      });
+    }
+    return;
+  }
 
   if (mainWindow) {
     mainWindow.webContents.send('backend-status', {
       status: 'error',
-      message: 'Backend failed to start. Retrying...'
+      message: `Backend failed to start. Retrying (${backendRetryCount}/${MAX_BACKEND_RETRIES})...`
     });
   }
 
-  // Attempt restart
+  // Attempt restart with delay
   setTimeout(() => {
     if (!backendReady) {
-      console.log('[DESKTOP] Attempting to restart backend...');
+      console.log(`[DESKTOP] Attempting to restart backend (${backendRetryCount + 1}/${MAX_BACKEND_RETRIES})...`);
       stopBackend();
       startBackend();
     }
@@ -227,8 +262,8 @@ function setupMenu() {
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'PFE Study Desktop',
-              message: 'PFE Study - Learning Platform',
+              title: 'SmartCarthage Desktop',
+              message: 'SmartCarthage - Learning Platform',
               detail: 'Version 1.0.0\n\nA comprehensive study and learning platform with AI-powered features.',
             });
           },

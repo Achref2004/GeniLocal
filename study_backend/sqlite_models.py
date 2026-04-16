@@ -1,6 +1,9 @@
 """
-SQLite Models for persistent storage of IA history, chat, planning, avatar, and progression
+SQLite Models for persistent storage of IA history, chat, planning, avatar, and progression.
+Includes IaCache for instant re-delivery of previously generated IA responses.
 """
+
+import hashlib
 
 from sqlalchemy import (
     create_engine, Column, Integer, String, DateTime, Text, Boolean, JSON,
@@ -12,8 +15,9 @@ from datetime import datetime
 import json
 import os
 
-# Create SQLite database in study_backend directory
-db_path = os.path.join(os.path.dirname(__file__), 'study_data.db')
+# Create a single SQLite database in study_backend directory.
+# This file is shared with the main SQLAlchemy database to ensure one database only.
+db_path = os.path.join(os.path.dirname(__file__), 'study_app.db')
 DATABASE_URL = f"sqlite:///{db_path.replace(chr(92), '/')}"
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -35,11 +39,40 @@ class IaHistory(Base):
     question = Column(String(500), nullable=True)  # For Q/R mode
     user_answer = Column(Text, nullable=True)  # For Q/R mode
     correction = Column(Text, nullable=True)  # For Q/R mode
-    metadata = Column(JSON, nullable=True)  # tokens, time, model_version, etc
+    meta_data = Column("metadata", JSON, nullable=True)  # tokens, time, model_version, etc
 
     __table_args__ = (
         Index('idx_user_mode_subject', 'user_id', 'mode', 'subject'),
     )
+
+
+class IaCache(Base):
+    """
+    Cache for IA-generated responses.
+    Uses MD5 hash of (input_text + mode + subject) to detect duplicate requests.
+    Per-user isolation: each user has their own cache entries.
+    """
+    __tablename__ = "ia_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    input_hash = Column(String(32), nullable=False, index=True)  # MD5 hex digest
+    mode = Column(String(20), nullable=False)  # 'resume', 'qcm', 'qr', etc.
+    subject = Column(String(100), nullable=True)
+    input_text = Column(Text, nullable=False)  # Original text (for display)
+    response = Column(Text, nullable=False)  # Full Ollama response
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_cache_lookup', 'user_id', 'input_hash', 'mode'),
+    )
+
+    @staticmethod
+    def compute_hash(text: str, mode: str, subject: str = "", language: str = "fr") -> str:
+        """Generate a deterministic hash for cache lookup."""
+        lang = (language or 'fr').strip().lower()
+        raw = f"{mode}:{subject}:{lang}:{text}".strip().lower()
+        return hashlib.md5(raw.encode('utf-8')).hexdigest()
 
 
 class ChatMessage(Base):

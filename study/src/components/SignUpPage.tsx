@@ -88,8 +88,8 @@ export function SignUpPage() {
 
             <div className="w-full h-48 rounded-md overflow-hidden border-2 border-[#d1cab5] shadow-md">
               <img 
-                src="https://images.unsplash.com/photo-1577985043696-8bd54d9f093f?auto=format&fit=crop&w=800&q=80"
-                alt="Bibliothèque ancienne"
+                src="/assets/image2-signup.png"
+                alt="Inscription SmartCarthage"
                 className="w-full h-full object-cover sepia-[0.3]"
               />
             </div>

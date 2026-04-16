@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useTheme } from '../../reutilisable/Themecontext';
 import './qcm-loading.css';
 import MemoryGame from './MemoryGame';
 
@@ -15,6 +16,7 @@ interface QcmViewProps {
 }
 
 export default function QcmView({ rawContent, isStreaming, onRemedialClick }: QcmViewProps) {
+  const { dark, T } = useTheme();
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showScore, setShowScore] = useState(false);
   const [showRemedialOffer, setShowRemedialOffer] = useState(false);
@@ -75,27 +77,27 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
     }
     // If not streaming but no questions, show loading state
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '500px', gap: '20px', padding: '40px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '500px', gap: '20px', padding: '40px', color: dark ? '#e2e8f0' : '#0f172a' }}>
         <div style={{
           fontSize: '1rem',
-          color: '#cbd5e1',
+          color: dark ? '#e2e8f0' : '#0f172a',
           textAlign: 'center',
         }}>
           <p style={{ marginBottom: '12px' }}>⏳ Traitement des questions...</p>
-          <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>Veuillez patienter...</p>
+          <p style={{ fontSize: '0.875rem', color: dark ? '#94a3b8' : '#475569' }}>Veuillez patienter...</p>
         </div>
         {/* Minimal progress bar */}
         <div style={{
           width: '100%',
           maxWidth: '300px',
           height: '3px',
-          background: 'rgba(255, 255, 255, 0.1)',
+          background: dark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)',
           borderRadius: '2px',
           overflow: 'hidden',
         }}>
           <div style={{
             height: '100%',
-            background: 'linear-gradient(90deg, #06b6d4 0%, #0ea5e9 100%)',
+            background: T.accent,
             animation: 'pulse 1.5s ease-in-out infinite',
             width: '50%',
           }} />
@@ -105,20 +107,20 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px', width: '100%', maxWidth: '900px', background: 'transparent', minHeight: 'auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '20px', width: '100%', maxWidth: '900px', background: 'transparent', minHeight: 'auto', color: dark ? '#f8fafc' : '#0f172a' }}>
       {/* Remedial Offer Panel */}
       {showRemedialOffer && onRemedialClick && (
         <div style={{
-          background: 'rgba(59, 130, 246, 0.1)',
-          border: '1px solid rgba(59, 130, 246, 0.5)',
+          background: dark ? 'rgba(15, 23, 42, 0.72)' : 'rgba(240, 249, 255, 0.92)',
+          border: `1px solid ${dark ? 'rgba(56, 189, 248, 0.45)' : 'rgba(56, 189, 248, 0.35)'}`,
           borderRadius: '12px',
           padding: '24px',
           backdropFilter: 'blur(32px)',
         }}>
-          <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '8px', color: '#3b82f6' }}>
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '8px', color: T.accent }}>
             💡 Besoin d'aide ?
           </h3>
-          <p style={{ color: '#cbd5e1', marginBottom: '16px', fontSize: '0.875rem' }}>
+          <p style={{ color: dark ? '#e2e8f0' : '#334155', marginBottom: '16px', fontSize: '0.875rem' }}>
             Vous avez des difficultés sur {wrongAnswers.questions.length} question{wrongAnswers.questions.length > 1 ? 's' : ''}.
             Laissez-nous générer des questions adaptées pour mieux comprendre.
           </p>
@@ -178,8 +180,8 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
       {/* Score panel */}
       {showScore && (
         <div style={{
-          background: 'rgba(30, 41, 59, 0.6)',
-          border: '1px solid rgba(6, 182, 212, 0.3)',
+          background: dark ? 'rgba(15, 23, 42, 0.86)' : '#f8fafc',
+          border: `1px solid ${dark ? 'rgba(14, 165, 233, 0.3)' : 'rgba(14, 165, 233, 0.18)'}`,
           borderRadius: '12px',
           padding: '24px',
           textAlign: 'center',
@@ -187,9 +189,9 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
         }}>
           <div style={{ fontSize: '3rem', fontWeight: 'bold', marginBottom: '8px' }}>
             <span style={{ color: score >= 3 ? '#4ade80' : '#ef4444' }}>{score}</span>
-            <span style={{ color: '#94a3b8' }}>/5</span>
+            <span style={{ color: dark ? '#94a3b8' : '#64748b' }}>/5</span>
           </div>
-          <p style={{ color: '#cbd5e1' }}>
+          <p style={{ color: dark ? '#e2e8f0' : '#0f172a' }}>
             {score === 5 ? '🎉 Parfait ! Excellent travail !' :
              score >= 3 ? '👏 Bien joué ! Continue comme ça !' :
              '📖 Continue à réviser, tu vas y arriver !'}
@@ -204,21 +206,22 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
             <div
               key={qIndex}
               style={{
-                background: 'rgba(30, 41, 59, 0.6)',
-                border: '1px solid rgba(6, 182, 212, 0.3)',
+                background: dark ? 'rgba(15, 23, 42, 0.88)' : '#ffffff',
+                border: `1px solid ${dark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(56, 189, 248, 0.18)'}`,
                 borderRadius: '12px',
                 padding: '20px',
                 backdropFilter: 'blur(32px)',
+                boxShadow: dark ? '0 10px 30px rgba(15, 23, 42, 0.25)' : '0 10px 30px rgba(15, 23, 42, 0.08)',
               }}
             >
-              <h3 style={{ fontWeight: '600', color: '#e2e8f0', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+              <h3 style={{ fontWeight: '600', color: dark ? '#e2e8f0' : '#0f172a', marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                 <span style={{
                   flexShrink: 0,
                   width: '28px',
                   height: '28px',
                   borderRadius: '8px',
-                  background: 'rgba(6, 182, 212, 0.2)',
-                  color: '#06b6d4',
+                  background: dark ? 'rgba(6, 182, 212, 0.18)' : 'rgba(56, 189, 248, 0.16)',
+                  color: dark ? '#38bdf8' : '#0284c7',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -294,7 +297,10 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
             <div style={{
               textAlign: 'center',
               padding: '40px',
-              color: '#bbb4b4',
+              color: dark ? '#e2e8f0' : '#0f172a',
+              background: dark ? 'rgba(15, 23, 42, 0.8)' : '#f8fafc',
+              border: `1px solid ${dark ? 'rgba(71, 85, 105, 0.35)' : 'rgba(148, 163, 184, 0.3)'}`,
+              borderRadius: '12px',
             }}>
               <p>Impossible de charger les questions. Veuillez réessayer.</p>
             </div>

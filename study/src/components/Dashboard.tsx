@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -7,23 +7,24 @@ import {
     BookOpen, Star, CheckCircle2, Sun, Moon, LogOut,
 } from 'lucide-react';
 import Sidebar, { UserProfile } from '../reutilisable/Sidebar';
+import Footer from '../reutilisable/Footer';
 import { useTheme } from '../reutilisable/Themecontext'; // ← thème global
-import { loadHistory } from '../utils/api_ia';
+import { loadHistory, type HistoryItem } from '../utils/api_ia';
 import { aggregateProgress, SubjectProgress } from '../utils/progressionStats';
 
 interface UserStats {
     total_study_seconds: number;
     days_present: number;
     average_qcm_score: number;
-    courses_completed: number;
-    progression: number;
+    documents_analyzed: number;
+    badges: string;
 }
 
-const activityData = [
-    { name: 'Lun', hours: 3 }, { name: 'Mar', hours: 4 },
-    { name: 'Mer', hours: 2 }, { name: 'Jeu', hours: 5 },
-    { name: 'Ven', hours: 3 }, { name: 'Sam', hours: 6 },
-    { name: 'Dim', hours: 4 },
+const DEFAULT_ACTIVITY_DATA = [
+    { name: 'Lun', hours: 2 }, { name: 'Mar', hours: 2.5 },
+    { name: 'Mer', hours: 1.5 }, { name: 'Jeu', hours: 3 },
+    { name: 'Ven', hours: 2.2 }, { name: 'Sam', hours: 4 },
+    { name: 'Dim', hours: 2.8 },
 ];
 
 const STARS = Array.from({ length: 60 }, (_, i) => ({
@@ -51,13 +52,17 @@ const Dashboard: React.FC = () => {
         total_study_seconds: 0,
         days_present: 0,
         average_qcm_score: 0,
-        courses_completed: 0,
-        progression: 0,
+        documents_analyzed: 0,
+        badges: '[]',
     });
     const [user, setUser] = useState<UserProfile | null>(null);
     const [activeTab, setActiveTab] = useState('resume');
     const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
     const [progressData, setProgressData] = useState<SubjectProgress[]>([]);
+    const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
+    const [showBadges, setShowBadges] = useState(false);
+    const saveTimer = useRef<NodeJS.Timeout | null>(null);
+    const lastPersistedSeconds = useRef<number>(0);
     const token = localStorage.getItem('token');
 
     const handleLogout = () => {
@@ -85,10 +90,31 @@ const Dashboard: React.FC = () => {
         return () => clearInterval(interval);
     }, []);
 
+    useEffect(() => {
+        if (!token) return;
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        const totalSeconds = stats.total_study_seconds || 0;
+        if (totalSeconds - lastPersistedSeconds.current < 10) return;
+        saveTimer.current = setTimeout(async () => {
+            try {
+                await axios.post('http://127.0.0.1:8000/api/progression', {
+                    total_study_seconds: totalSeconds,
+                }, {
+                    headers: { Authorization: `Bearer ${token}` },
+                });
+                lastPersistedSeconds.current = totalSeconds;
+            } catch (error) {
+                console.warn('Impossible de sauvegarder le temps de session', error);
+            }
+        }, 5000);
+        return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+    }, [stats.total_study_seconds, token]);
+
     // Charger les données de progression depuis l'historique
     useEffect(() => {
-        const loadProgressData = () => {
-            const history = loadHistory();
+        const loadProgressData = async () => {
+            const history = await loadHistory();
+            setHistoryData(history);
             const progress = aggregateProgress(history);
             setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
         };
@@ -100,15 +126,46 @@ const Dashboard: React.FC = () => {
 
     // Calculer les statistiques globales de progression
     const globalProgression = useMemo(() => {
-        if (progressData.length === 0) {
-            return {
-                totalSubjects: 0,
-            };
-        }
         return {
             totalSubjects: progressData.length,
         };
     }, [progressData]);
+
+    const badgeList = useMemo(() => {
+        try {
+            const list = JSON.parse(stats.badges || '[]');
+            return Array.isArray(list) ? list : [];
+        } catch {
+            return [];
+        }
+    }, [stats.badges]);
+
+    const weeklyActivity = useMemo(() => {
+        const now = new Date();
+        const rawDays = Array.from({ length: 7 }, (_, index) => {
+            const day = new Date(now);
+            day.setDate(now.getDate() - (6 - index));
+            const label = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'][day.getDay()];
+            const key = day.toISOString().slice(0, 10);
+            const count = historyData.filter((item) => {
+                const itemDate = new Date(item.timestamp).toISOString().slice(0, 10);
+                return itemDate === key;
+            }).length;
+            return { label, count };
+        });
+
+        const totalCount = rawDays.reduce((sum, day) => sum + day.count, 0);
+        const totalHours = stats.total_study_seconds / 3600;
+
+        if (totalCount === 0) {
+            return DEFAULT_ACTIVITY_DATA;
+        }
+
+        return rawDays.map((day) => ({
+            name: day.label,
+            hours: Math.max(0, Math.round((totalHours * (day.count / totalCount)) * 10) / 10),
+        }));
+    }, [historyData, stats.total_study_seconds]);
 
     const formatTime = (s: number) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
@@ -145,7 +202,7 @@ const Dashboard: React.FC = () => {
                         { icon: <Clock size={26} />, accent: '#4f6ef7', label: "Heures d'étude", value: formatTime(stats.total_study_seconds), mono: true },
                         { icon: <TrendingUp size={26} />, accent: '#00b8d9', label: 'Jours de présence', value: String(stats.days_present) },
                         { icon: <Award size={26} />, accent: '#e91e94', label: 'Score QCM moyen', value: `${Math.round(stats.average_qcm_score)}%` },
-                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Cours complétés', value: String(stats.courses_completed) },
+                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Documents analysés', value: String(stats.documents_analyzed) },
                     ].map(({ icon, accent, label, value, mono }) => (
                         <div key={label} style={card({ padding: '24px 22px', position: 'relative', overflow: 'hidden', cursor: 'default' })}
                             onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
@@ -155,7 +212,7 @@ const Dashboard: React.FC = () => {
                                 <div style={{ width: 48, height: 48, background: accent, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 8px 20px ${accent}40` }}>{icon}</div>
                                 <span style={{ fontSize: mono ? 22 : 32, fontWeight: 800, color: '#b6009e', fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</span>
                             </div>
-                            <p style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1 }}>{label}</p>
+                            <p style={{ color: 'rgba(0, 148, 153, 0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1 }}>{label}</p>
                         </div>
                     ))}
 
@@ -187,12 +244,13 @@ const Dashboard: React.FC = () => {
                                 {globalProgression.totalSubjects}
                             </span>
                         </div>
-                        <p style={{ color: 'rgba(255,255,255,0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1, marginBottom: 6 }}>Ma Progression</p>
-                        <p style={{ color: 'rgba(255,255,255,0.45)', fontWeight: 500, fontSize: 12, position: 'relative', zIndex: 1 }}>
+                        <p style={{ color: 'rgba(141, 0, 139, 0.6)', fontWeight: 600, fontSize: 14, position: 'relative', zIndex: 1, marginBottom: 6 }}>Ma Progression</p>
+                        <p style={{ color: 'rgba(118, 0, 129, 0.45)', fontWeight: 500, fontSize: 12, position: 'relative', zIndex: 1 }}>
                             {globalProgression.totalSubjects > 0
                                 ? `${globalProgression.totalSubjects} matière(s)`
                                 : 'Aucune donnée'}
                         </p>
+                       
                     </div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
@@ -201,7 +259,7 @@ const Dashboard: React.FC = () => {
                         <h3 style={{ fontWeight: 700, fontSize: 17, marginBottom: 20, color: T.textOnCard }}>Activité hebdomadaire</h3>
                         <div style={{ height: 250 }}>
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={activityData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+                                <BarChart data={weeklyActivity} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="cbar" x1="0" y1="0" x2="0" y2="1">
                                             <stop offset="0%" stopColor={T.accent} />
@@ -216,65 +274,103 @@ const Dashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    <div style={card({ padding: '28px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 })}>
-                        <h3 style={{ fontWeight: 700, fontSize: 17, color: T.textOnCard }}>Progression globale</h3>
-                        <div style={{ position: 'relative', width: 160, height: 160 }}>
-                            <svg width="160" height="160" style={{ transform: 'rotate(-90deg)' }}>
-                                <circle cx="80" cy="80" r="62" fill="transparent" stroke="rgba(255,255,255,0.07)" strokeWidth="16" />
-                                <circle cx="80" cy="80" r="62" fill="transparent" stroke={T.accent}
-                                    strokeWidth="16" strokeDasharray="390"
-                                    strokeDashoffset={390 - (390 * (stats.progression || 0)) / 100}
-                                    strokeLinecap="round"
-                                    style={{ filter: `drop-shadow(0 0 8px ${T.accent})`, transition: 'stroke-dashoffset 1s ease-out' }} />
-                            </svg>
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <span style={{ fontSize: 36, fontWeight: 900, color: T.accent }}>{Math.round(stats.progression || 0)}%</span>
+                    
+                </div>
+
+                {showBadges && (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                        <div style={{ width: 'min(760px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 24, padding: 28, boxShadow: '0 24px 68px rgba(0,0,0,0.22)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                                <div>
+                                    <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: T.textOnCard }}>Badges SmartCarthage</h2>
+                                    <p style={{ margin: '8px 0 0', color: T.textOnCardMuted }}>Vos récompenses sont sauvegardées automatiquement.</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowBadges(false)}
+                                    style={{ border: 'none', background: 'transparent', color: T.textOnCardMuted, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}
+                                >✕</button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                                {badgeList.length > 0 ? badgeList.map((badge, index) => (
+                                    <div key={index} style={{ padding: 18, borderRadius: 18, background: dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 140, 148, 0.07)', border: `1px solid ${T.border}` }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                                            <Award size={20} color={T.accent} />
+                                            <strong style={{ color: T.textOnCard }}>{badge}</strong>
+                                        </div>
+                                        <p style={{ margin: 0, color: T.textOnCardMuted, fontSize: 13 }}>Badge débloqué à partir de votre activité et de votre historique.</p>
+                                    </div>
+                                )) : (
+                                    <div style={{ gridColumn: '1 / -1', padding: 20, borderRadius: 18, background: dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 140, 148, 0.07)', border: `1px solid ${T.border}` }}>
+                                        <p style={{ margin: 0, color: T.textOnCardMuted }}>Vous n'avez pas encore de badge. Utilisez l'IA pour gagner vos premiers points.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <p style={{ color: T.textOnCardMuted, fontSize: 14, fontWeight: 600 }}>Objectif atteint</p>
                     </div>
-                </div>
+                )}
 
                 {/* Bottom Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                    {/* Premium Card - Theme Aware with Gold Text */}
-                    <div style={{
-                        background: dark
-                            ? `linear-gradient(135deg, ${T.card} 0%, ${T.card}dd 100%)`
-                            : `linear-gradient(135deg, ${T.card} 0%, ${T.card}ee 100%)`,
-                        borderRadius: 28,
-                        padding: '36px 32px',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        border: `2px solid #d4af37`,
-                        boxShadow: `0 0 20px #d4af3720`
-                    }}>
-                        <Star style={{ position: 'absolute', top: 24, right: 24, opacity: 0.15 }} size={60} color="#d4af37" />
-                        <div style={{ position: 'absolute', bottom: -40, left: -40, width: 180, height: 180, background: '#d4af37', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.12 }} />
-
-                        <h2 style={{ fontSize: 28, fontWeight: 900, marginBottom: 6, color: '#d4af37', position: 'relative', zIndex: 1 }}>Version Premium</h2>
-                        <p style={{ color: T.textOnCard, marginBottom: 24, fontWeight: 500, position: 'relative', zIndex: 1 }}>Débloquez tout le potentiel</p>
-
-                        <ul style={{ listStyle: 'none', padding: 0, display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28, position: 'relative', zIndex: 1 }}>
-                            {[' IA avancée avec OCR manuscrit', ' QCM et résumés illimités', ' Planning intelligent avec rappels', 'Avatar personnalisé qui parle', ' Mode hors-ligne complet', ' Support psychologique premium'].map(item => (
-                                <li key={item} style={{ display: 'flex', alignItems: 'center', gap: 12, fontWeight: 500, fontSize: 15, color: T.textOnCard }}>
-                                    <span style={{ width: 32, height: 32, background: '#d4af3720', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0, border: `1px solid #d4af3750`, color: '#d4af37' }}>{item.slice(0, 2)}</span>
-                                    {item.slice(3)}
-                                </li>
-                            ))}
-                        </ul>
-                        <button style={{ width: '100%', background: `linear-gradient(135deg, #d4af37 0%, #c9a227 100%)`, color: '#1a1a2e', fontWeight: 900, fontSize: 17, padding: '16px 0', borderRadius: 16, border: 'none', cursor: 'pointer', boxShadow: `0 8px 24px #d4af3740`, position: 'relative', zIndex: 1, transition: 'all 0.3s' }}
-                            onMouseEnter={e => {
-                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
-                                (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 12px 32px #d4af3750`;
-                            }}
-                            onMouseLeave={e => {
-                                (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-                                (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 24px #d4af3740`;
-                            }}
-                        >
-                            Passer à Premium →
-                        </button>
+                    <div style={card({ padding: '28px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 18 })}>
+                        <div>
+                            <h3 style={{ fontWeight: 700, fontSize: 17, color: T.textOnCard }}>Badges SmartCarthage</h3>
+                            <p style={{ color: T.textOnCardMuted, fontSize: 14, fontWeight: 600, marginTop: 6 }}>Vos récompenses basées sur votre activité IA.</p>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12, width: '100%' }}>
+                            {badgeList.length > 0 ? badgeList.map((badge, index) => (
+                                <button
+                                    key={index}
+                                    onClick={() => setShowBadges(true)}
+                                    style={{
+                                        width: '100%',
+                                        minHeight: 96,
+                                        borderRadius: 20,
+                                        border: `1px solid ${T.border}`,
+                                        background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0, 140, 148, 0.08)',
+                                        color: T.textOnCard,
+                                        padding: '16px',
+                                        textAlign: 'left',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        justifyContent: 'space-between',
+                                        cursor: 'pointer',
+                                        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
+                                        (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 12px 24px ${T.accent}20`;
+                                    }}
+                                    onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
+                                        (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+                                    }}
+                                >
+                                    <span style={{ fontSize: 14, fontWeight: 700, color: T.accent, marginBottom: 8 }}>Badge</span>
+                                    <span style={{ fontSize: 15, fontWeight: 800 }}>{badge}</span>
+                                </button>
+                            )) : (
+                                <div style={{ padding: 18, borderRadius: 20, background: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0, 140, 148, 0.08)', border: `1px solid ${T.border}`, color: T.textOnCardMuted }}>
+                                    <p style={{ margin: 0, fontWeight: 600 }}>Aucun badge disponible</p>
+                                    <p style={{ margin: '8px 0 0', fontSize: 13 }}>Utilisez l'IA et progressez pour débloquer vos premiers badges.</p>
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button
+                                onClick={() => setShowBadges(true)}
+                                style={{
+                                    padding: '12px 18px',
+                                    borderRadius: 14,
+                                    border: '1px solid transparent',
+                                    background: T.accent,
+                                    color: '#fff',
+                                    cursor: 'pointer',
+                                    fontWeight: 700,
+                                }}
+                            >
+                                Afficher tous les badges
+                            </button>
+                        </div>
                     </div>
 
                     {/* Features Card */}
@@ -360,6 +456,7 @@ const Dashboard: React.FC = () => {
                         </div>
                     </header>
                     {renderContent()}
+                    <Footer />
                 </div>
             </main>
 

@@ -31,10 +31,13 @@ export const OLLAMA_CONFIG: OllamaConfig = {
  */
 export async function checkOllamaAvailable(): Promise<boolean> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(`${OLLAMA_CONFIG.endpoint}/api/tags`, {
       method: 'GET',
-      timeout: 5000,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
     if (!response.ok) return false;
     const data = await response.json() as { models?: Array<{ name: string }> };
     return data.models?.some((m) => m.name.includes('mistral')) ?? false;

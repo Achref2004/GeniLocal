@@ -105,18 +105,18 @@ export function LoginPage() {
             <h2 className="font-serif text-3xl mb-2 text-[#3a3f3b]">Préface</h2>
             <div className="h-px w-16 mx-auto bg-[#cdaa6a] mb-8"></div>
             <p className="font-serif text-lg italic text-[#4a524c] mb-6 leading-relaxed">
-              "L'éducation est l'arme la plus puissante qu'on puisse utiliser pour changer le monde."
+              "let's make carthage great again "
             </p>
-            <div className="w-full h-40 rounded-md overflow-hidden mb-6 border-2 border-[#d1cab5]">
+            <div>
               <img 
-                  src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?auto=format&fit=crop&w=800&q=80" 
-                  alt="Bibliothèque ancienne"
+                  src="/assets/logo_smartcarthage.png" 
+                  alt="Logo SmartCarthage"
                   className="w-full h-full object-cover"
-                  style={{ filter: 'sepia(0.3) contrast(0.9) brightness(0.9)' }}
+                  style={{ filter: 'sepia(0.08) contrast(1) brightness(1.03)' }}
               />
             </div>
             <p className="text-sm text-[#5e6660] leading-relaxed px-4">
-              Bienvenue dans Study. Une plateforme conçue par <span className="font-serif font-semibold text-[#3a3f3b]">Achref Jnayeh</span> pour redéfinir l'apprentissage.
+              Bienvenue dans <span style={{ color: '#0e7d83' }}>Smart</span><span style={{ color: '#95393e' }}>Carthage</span>. Une plateforme conçue par <span className="font-serif font-semibold text-[#3a3f3b]">Achref Jnayeh</span> pour redéfinir l'apprentissage.
             </p>
           </div>
         </div>

@@ -22,7 +22,7 @@ const MAX_MESSAGES_PER_DAY_CONST = MAX_MESSAGES_PER_DAY;
 // Save chat message to database
 async function saveChatMessageToDatabase(message: ChatMessage, sessionId: string): Promise<void> {
   try {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('token');
     if (!token) return;
 
     await fetch('http://localhost:8000/api/chat/messages', {
@@ -45,7 +45,7 @@ async function saveChatMessageToDatabase(message: ChatMessage, sessionId: string
 // Load chat history from database
 async function loadChatHistoryFromDatabase(sessionId: string): Promise<ChatMessage[]> {
   try {
-    const token = localStorage.getItem('access_token');
+    const token = localStorage.getItem('token');
     if (!token) return [];
 
     const response = await fetch(
@@ -84,6 +84,8 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
+  const stopRequestedRef = useRef(false);
+  const assistantMessageIdRef = useRef<number | null>(null);
 
   // Initialiser le compteur + charger historique
   useEffect(() => {
@@ -119,6 +121,8 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
     e.preventDefault();
     if (!inputValue.trim() || isLoading) return;
 
+    stopRequestedRef.current = false;
+
     // Vérifier la limite
     if (!canSendMessage()) {
       alert(` Limite atteinte! Vous avez utilisé vos ${MAX_MESSAGES_PER_DAY_CONST} messages. Réessayez dans ${getTimeUntilReset()}.`);
@@ -135,6 +139,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
 
     // Créer un message assistant vide pour le streaming
     const assistantMessageId = Date.now() + 1;
+    assistantMessageIdRef.current = assistantMessageId;
     const assistantMessage: ChatMessage = {
       id: assistantMessageId,
       role: 'assistant',
@@ -177,7 +182,11 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
           m.id === assistantMessageId ? { ...m, content: fullText } : m
         ));
       },
-      (fullText) => {
+      async (fullText) => {
+        if (stopRequestedRef.current) {
+          setIsLoading(false);
+          return;
+        }
         setIsLoading(false);
         // Finaliser le message
         setMessages(prev => prev.map(m =>
@@ -191,7 +200,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         );
 
         // Sauvegarder dans histoire
-        saveToHistory({
+        await saveToHistory({
           mode: 'qr',
           text: userInput.substring(0, 100),
           subject,
@@ -201,6 +210,10 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         onMessagesSent?.([userMessage, { ...assistantMessage, content: fullText }]);
       },
       (err) => {
+        if (stopRequestedRef.current) {
+          setIsLoading(false);
+          return;
+        }
         setIsLoading(false);
         const errorMessage: ChatMessage = {
           id: Date.now() + 2,
@@ -211,10 +224,28 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         setMessages(prev => [...prev, errorMessage]);
       }
     );
-  }, [inputValue, isLoading, text, subject, onMessagesSent, sessionId];
+  }, [inputValue, isLoading, messages, text, subject, onMessagesSent, sessionId]);
 
   const remainingMessages = getRemainingMessages();
   const canSend = canSendMessage();
+
+  const handleStop = () => {
+    stopRequestedRef.current = true;
+    if (controllerRef.current) {
+      controllerRef.current.abort();
+      controllerRef.current = null;
+    }
+    setIsLoading(false);
+    if (assistantMessageIdRef.current) {
+      setMessages(prev => prev.map(m =>
+        m.id === assistantMessageIdRef.current
+          ? { ...m, content: `${m.content}\n
+*Génération arrêtée par l'utilisateur.*` }
+          : m
+      ));
+      assistantMessageIdRef.current = null;
+    }
+  };
 
   return (
     <div style={{
@@ -426,19 +457,22 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
           }}
         />
         <button
-          type="submit"
-          disabled={isLoading || !canSend || !inputValue.trim()}
+          type={isLoading ? 'button' : 'submit'}
+          onClick={isLoading ? handleStop : undefined}
+          disabled={!isLoading && (!canSend || !inputValue.trim())}
           style={{
             padding: '10px 16px',
             borderRadius: '8px',
-            background: (isLoading || !canSend || !inputValue.trim())
+            background: (!isLoading && (!canSend || !inputValue.trim()))
               ? `${T.textMuted}40`
-              : `linear-gradient(135deg, ${T.accent} 0%, ${T.accentSoft} 100%)`,
+              : isLoading
+                ? '#ef4444'
+                : `linear-gradient(135deg, ${T.accent} 0%, ${T.accentSoft} 100%)`,
             border: 'none',
-            color: (isLoading || !canSend || !inputValue.trim())
+            color: !isLoading && (!canSend || !inputValue.trim())
               ? T.textMuted
-              : dark ? '#0b2a4a' : '#ffffff',
-            cursor: (isLoading || !canSend || !inputValue.trim()) ? 'not-allowed' : 'pointer',
+              : '#ffffff',
+            cursor: (!isLoading && (!canSend || !inputValue.trim())) ? 'not-allowed' : 'pointer',
             fontWeight: 'bold',
             transition: 'all 0.3s',
             display: 'flex',
@@ -454,7 +488,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
             (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
           }}
         >
-          {isLoading ? '...' : <Send size={18} />}
+          {isLoading ? 'Stop' : <Send size={18} />}
         </button>
       </form>
     </div>

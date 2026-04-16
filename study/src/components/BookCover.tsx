@@ -141,13 +141,13 @@ export function BookCover() {
             {/* Title - Gris chaud foncé pour la lisibilité */}
             <div className="text-center mb-6 mt-4">
               <h1 
-                className="font-serif text-5xl tracking-widest mb-3 text-[#3a3f3b]"
+                className="font-serif text-4xl tracking-widest mb-3"
                 style={{
                   fontFamily: 'Georgia, serif',
                   textShadow: '1px 1px 2px rgba(255,255,255,0.2)',
                 }}
               >
-                study
+                <span style={{ color: '#0e7d83' }}>Smart</span><span style={{ color: '#95393e' }}>Carthage</span>
               </h1>
               <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-[#cdaa6a] to-transparent"></div>
             </div>

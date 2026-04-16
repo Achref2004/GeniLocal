@@ -1,830 +1,1230 @@
-# ══════════════════════════════════════════════════════════════
-# MODULE DATA PERSISTENCE — SQLite + Redis Cache
-# ══════════════════════════════════════════════════════════════
+from fastapi import FastAPI, Depends, HTTPException, status, Request, APIRouter, UploadFile, File
+from fastapi.responses import RedirectResponse, StreamingResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from fastapi.middleware.cors import CORSMiddleware
+from authlib.integrations.starlette_client import OAuth
+import models, schemas, auth, sqlite_models
+from database import engine, get_db
+from auth import get_current_user, get_current_admin
+from typing import List, Dict, AsyncGenerator
+from fastapi.security import OAuth2PasswordRequestForm
+from starlette.middleware.sessions import SessionMiddleware
+from datetime import datetime, timedelta
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig, MessageType
+import httpx
+import json
+import os
+import sys
+import tempfile
 
-# ─── IA HISTORY ENDPOINTS ───
+# Création des tables (main database)
+models.Base.metadata.create_all(bind=engine)
 
-@app.post("/api/ia-history")
-async def save_ia_history(
-    data: dict,
-    current_user: models.User = Depends(get_current_user)
-):
-    """
-    Save AI-generated content to SQLite
-    Expected: {mode, input_text, subject, result, question?, user_answer?, correction?, metadata?}
-    """
-    from sqlite_models import IaHistory, SessionLocal
+# Création des tables SQLite pour données utilisateur (history, cache, planning, avatar)
+from sqlite_models import Base as SqliteBase, engine as sqlite_engine, get_db as get_sqlite_db
+SqliteBase.metadata.create_all(bind=sqlite_engine)
 
+app = FastAPI(title="SmartCarthage API")
+
+# Middleware
+app.add_middleware(SessionMiddleware, secret_key="ton_secret_pour_les_sessions_etudes_achref")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configuration Email
+conf = ConnectionConfig(
+    MAIL_USERNAME = "achrefjnayeh@gmail.com",
+    MAIL_PASSWORD = "anqfrbovynwirqiy", 
+    MAIL_FROM = "achrefjnayeh@gmail.com",
+    MAIL_PORT = 587,
+    MAIL_SERVER = "smtp.gmail.com",
+    MAIL_STARTTLS = True,
+    MAIL_SSL_TLS = False,
+    USE_CREDENTIALS = True,
+    VALIDATE_CERTS = True
+)
+
+@app.get("/")
+def home():
+    return {"message": "Bienvenue sur l'API de SmartCarthage"}
+
+# --- AUTHENTICATION ---
+
+@app.post("/signup", response_model=schemas.UserOut, status_code=status.HTTP_201_CREATED)
+def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     try:
-        db_sqlite = SessionLocal()
-
-        new_entry = IaHistory(
-            user_id=current_user.id,
-            timestamp=datetime.utcnow(),
-            mode=data.get("mode", ""),
-            input_text=data.get("input_text", ""),
-            subject=data.get("subject", ""),
-            result=data.get("result", ""),
-            question=data.get("question"),
-            user_answer=data.get("user_answer"),
-            correction=data.get("correction"),
-            metadata=data.get("metadata", {})
+        db_user = db.query(models.User).filter(models.User.email == user.email).first()
+        if db_user:
+            raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+        
+        hashed_pwd = auth.hash_password(user.password)
+        new_user = models.User(
+            username=user.username,
+            email=user.email,
+            hashed_password=hashed_pwd,
+            region=user.region
         )
+        db.add(new_user)
+        db.flush() 
 
-        db_sqlite.add(new_entry)
-        db_sqlite.commit()
-        db_sqlite.refresh(new_entry)
+        new_stats = models.UserStats(user_id=new_user.id)
+        db.add(new_stats)
+        
+        db.commit()
+        db.refresh(new_user)
+        return new_user
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Cet email est déjà enregistré.")
 
-        # Cache the response in Redis
-        if cache_manager:
-            cache_manager.set_ia_response(
-                data.get("input_text", ""),
-                data.get("subject", ""),
-                data.get("mode", ""),
-                data.get("result", "")
-            )
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email ou mot de passe incorrect")
+    if user.hashed_password is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce compte utilise Google.")
+    if not auth.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email ou mot de passe incorrect")
+    
+    access_token = auth.create_access_token(data={"sub": user.email, "is_admin": user.is_admin})
+    return {"access_token": access_token, "token_type": "bearer", "is_admin": user.is_admin}
 
-        logger.info(f"✅ IA history saved for user {current_user.id}: {data.get('mode')}")
+# --- GOOGLE OAUTH ---
+oauth = OAuth()
+oauth.register(
+    name='google',
+    client_id='708566411731-vpgbh8iapqckqckcoqpm6hrc4dm46abe.apps.googleusercontent.com',
+    client_secret='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',
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={'scope': 'openid email profile'}
+)
 
-        return {
-            "id": new_entry.id,
-            "timestamp": new_entry.timestamp.isoformat(),
-            "status": "saved"
-        }
+@app.get("/login/google")
+async def login_google(request: Request):
+    redirect_uri = "http://localhost:8000/auth/google/callback"
+    return await oauth.google.authorize_redirect(request, redirect_uri)
 
-    except Exception as e:
-        logger.error(f"❌ Error saving IA history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+@app.get("/auth/google/callback")
+async def auth_google(request: Request, db: Session = Depends(get_db)):
+    token = await oauth.google.authorize_access_token(request)
+    user_info = token.get('userinfo')
+    user = db.query(models.User).filter(models.User.email == user_info['email']).first()
+    
+    if not user:
+        user = models.User(username=user_info['name'], email=user_info['email'], is_admin=False)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
 
+    stats = db.query(models.UserStats).filter(models.UserStats.user_id == user.id).first()
+    if not stats:
+        new_stats = models.UserStats(user_id=user.id)
+        db.add(new_stats)
+        db.commit()
 
-@app.get("/api/ia-history")
-async def get_ia_history(
-    mode: str = None,
-    subject: str = None,
-    limit: int = 50,
-    offset: int = 0,
-    current_user: models.User = Depends(get_current_user)
+    access_token = auth.create_access_token(data={"sub": user.email, "is_admin": user.is_admin})
+    return RedirectResponse(url=f"http://localhost:5173/login?token={access_token}")
+
+# --- PROFIL UTILISATEUR (FIXED) ---
+
+@app.get("/users/me", response_model=schemas.UserOut)
+def get_my_profile(current_user: models.User = Depends(auth.get_current_user)):
+    return current_user
+
+@app.put("/users/me", response_model=schemas.UserOut)
+def update_my_profile(
+    user_update: schemas.UserUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(auth.get_current_user)
 ):
+    db_user = db.query(models.User).filter(models.User.id == current_user.id).first()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # On convertit le schéma en dictionnaire en ignorant les valeurs non envoyées
+    update_data = user_update.model_dump(exclude_unset=True)
+    
+    # On met à jour dynamiquement chaque champ présent
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    try:
+        db.commit()
+        db.refresh(db_user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur base de données : {str(e)}")
+        
+    return db_user
+
+@app.get("/users/me/stats", response_model=schemas.UserStatsOut)
+def get_my_stats(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    stats = db.query(models.UserStats).filter(models.UserStats.user_id == current_user.id).first()
+    if not stats:
+        raise HTTPException(status_code=404, detail="Statistiques non trouvées")
+    return stats
+
+# --- BADGES ET PROGRESSION INTELLIGENTE ---
+
+def parse_badges(raw: str):
+    if not raw:
+        return []
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed]
+    except Exception:
+        return [str(raw)]
+    return []
+
+
+def normalize_badges(badges):
+    normalized = []
+    for item in badges:
+        text = str(item).strip()
+        if text and text not in normalized:
+            normalized.append(text)
+    return sorted(normalized)
+
+
+def update_user_badges(db: Session, user_id: int, mode: str):
+    stats = db.query(models.UserStats).filter(models.UserStats.user_id == user_id).first()
+    if not stats:
+        return
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    total_today = db.query(sqlite_models.IaHistory).filter(
+        sqlite_models.IaHistory.user_id == user_id,
+        sqlite_models.IaHistory.timestamp >= today_start
+    ).count()
+    resume_today = db.query(sqlite_models.IaHistory).filter(
+        sqlite_models.IaHistory.user_id == user_id,
+        sqlite_models.IaHistory.mode == 'resume',
+        sqlite_models.IaHistory.timestamp >= today_start
+    ).count()
+    qcm_today = db.query(sqlite_models.IaHistory).filter(
+        sqlite_models.IaHistory.user_id == user_id,
+        sqlite_models.IaHistory.mode == 'qcm',
+        sqlite_models.IaHistory.timestamp >= today_start
+    ).count()
+    qr_today = db.query(sqlite_models.IaHistory).filter(
+        sqlite_models.IaHistory.user_id == user_id,
+        sqlite_models.IaHistory.mode == 'qr',
+        sqlite_models.IaHistory.timestamp >= today_start
+    ).count()
+    total_history = db.query(sqlite_models.IaHistory).filter(
+        sqlite_models.IaHistory.user_id == user_id
+    ).count()
+    unique_subjects = db.query(func.count(func.distinct(sqlite_models.IaHistory.subject))).filter(
+        sqlite_models.IaHistory.user_id == user_id,
+        sqlite_models.IaHistory.subject != None,
+        sqlite_models.IaHistory.subject != ''
+    ).scalar() or 0
+
+    badges = parse_badges(stats.badges)
+
+    if total_history > 0 and 'Premier utilisation' not in badges:
+        badges.append('Premier utilisation')
+    if unique_subjects >= 5 and '+5 matières ajoutées' not in badges:
+        badges.append('+5 matières ajoutées')
+    if resume_today >= 10 and 'Résumé Expert' not in badges:
+        badges.append('Résumé Expert')
+    if qcm_today >= 5 and 'QCM Master' not in badges:
+        badges.append('QCM Master')
+    if qr_today >= 5 and 'Conversation Active' not in badges:
+        badges.append('Conversation Active')
+    if stats.total_study_seconds >= 3600 and '1h d\'étude' not in badges:
+        badges.append('1h d\'étude')
+    if stats.days_present >= 7 and 'Présence 1 semaine' not in badges:
+        badges.append('Présence 1 semaine')
+
+    stats.badges = json.dumps(normalize_badges(badges))
+    db.commit()
+
+
+def recalc_days_present(user_id: int) -> int:
+    db = sqlite_models.SessionLocal()
+    try:
+        count = db.query(func.strftime('%Y-%m-%d', sqlite_models.IaHistory.timestamp)).filter(
+            sqlite_models.IaHistory.user_id == user_id
+        ).distinct().count()
+        return count
+    finally:
+        db.close()
+
+
+@app.post('/users/me/badges')
+def add_custom_badge(badge: dict, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    stats = db.query(models.UserStats).filter(models.UserStats.user_id == current_user.id).first()
+    if not stats:
+        raise HTTPException(status_code=404, detail='Statistiques introuvables')
+
+    badges = parse_badges(stats.badges)
+    new_badge = str(badge.get('name', '')).strip()
+    if new_badge and new_badge not in badges:
+        badges.append(new_badge)
+        stats.badges = json.dumps(normalize_badges(badges))
+        db.commit()
+    return {'badges': badges}
+
+# --- STATISTIQUES ---
+
+@app.get("/api/progression")
+def get_progression(db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    stats = db.query(models.UserStats).filter(models.UserStats.user_id == current_user.id).first()
+    if not stats:
+        stats = models.UserStats(user_id=current_user.id)
+        db.add(stats)
+        db.commit()
+        db.refresh(stats)
+    return stats
+
+@app.post("/api/progression")
+def update_progression(prog_in: dict, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
+    db_stats = db.query(models.UserStats).filter(models.UserStats.user_id == current_user.id).first()
+    if not db_stats:
+        raise HTTPException(status_code=404, detail="Stats introuvables")
+
+    new_seconds = prog_in.get("total_study_seconds", db_stats.total_study_seconds)
+    db_stats.total_study_seconds = new_seconds
+    db_stats.days_present = new_seconds // 86400 
+    
+    db.commit()
+    return {"message": "Succès", "total_seconds": db_stats.total_study_seconds}
+
+# --- AUTRES ROUTES ---
+
+@app.post("/forgot-password")
+async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email_schema.email).first()
+    if not user:
+        return {"message": "Si cet email existe, un lien a été envoyé."}
+    if user.hashed_password is None:
+        raise HTTPException(status_code=400, detail="Ce compte utilise Google.")
+
+    reset_token = auth.create_access_token(data={"sub": user.email})
+    link = f"http://localhost:5173/reset-password?token={reset_token}"
+
+    # Créer un template HTML 
+    username = user.fullname or user.username or "Utilisateur"
+
+    html_body = f"""
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                margin: 0;
+                padding: 20px;
+                font-family: 'Georgia', 'Playfair Display', serif;
+                background: #f5f5f5;
+            }}
+            .wrapper {{
+                max-width: 520px;
+                margin: 0 auto;
+            }}
+            .card {{
+                background: linear-gradient(135deg, #1a2845 0%, #0f1419 100%);
+                position: relative;
+                padding: 50px 40px;
+                text-align: center;
+                border-radius: 8px;
+                border: 4px solid #c0c0c0;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            }}
+            .card-content {{
+                position: relative;
+                z-index: 1;
+            }}
+            .logo {{
+                font-size: 36px;
+                font-weight: bold;
+                margin-bottom: 20px;
+                letter-spacing: 2px;
+                color: #e8d5b7;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
+            }}
+            .greeting {{
+                font-size: 26px;
+                font-weight: normal;
+                margin-bottom: 10px;
+                letter-spacing: 0.5px;
+                color: #c0c0c0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
+            }}
+            .user-name {{
+                font-size: 38px;
+                font-weight: bold;
+                margin-bottom: 30px;
+                color: #e8d5b7;
+                text-shadow: 3px 3px 6px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.6);
+                font-family: 'Playfair Display', Georgia, serif;
+            }}
+            .message {{
+                color: #e0e0e0;
+                font-size: 14px;
+                line-height: 1.8;
+                margin: 20px 0;
+                font-family: 'Georgia', serif;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .button {{
+                display: inline-block;
+                background: linear-gradient(135deg, #1a3456 0%, #0d1b2a 100%);
+                color: white;
+                padding: 14px 45px;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 700;
+                font-size: 15px;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                box-shadow: 0 4px 15px rgba(26, 52, 86, 0.6);
+                transition: all 0.3s ease;
+                margin: 30px 0;
+            }}
+            .button:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(26, 52, 86, 0.8);
+                background: linear-gradient(135deg, #2a4a70 0%, #1a3456 100%);
+            }}
+            .security-note {{
+                font-size: 12px;
+                color: #b0b0b0;
+                margin-top: 20px;
+                font-family: 'Georgia', serif;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 40px;
+                color: #e8d5b7;
+                font-size: 12px;
+                font-family: 'Georgia', serif;
+                letter-spacing: 0.5px;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 6px rgba(0,0,0,0.5);
+            }}
+            .ticket-divider {{
+                border-top: 2px dashed #c0c0c0;
+                margin: 40px 0;
+                opacity: 0.6;
+            }}
+            .ticket-footer {{
+                text-align: center;
+                color: #c0c0c0;
+                font-size: 11px;
+                font-family: 'Georgia', serif;
+                line-height: 1.8;
+                text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+                margin-top: 30px;
+                padding-top: 20px;
+            }}
+            .ticket-footer .copyright {{
+                color: #a0a0a0;
+                font-size: 10px;
+                margin-bottom: 10px;
+            }}
+            .ticket-footer .author {{
+                color: #a0a0a0;
+                font-size: 10px;
+                margin-bottom: 15px;
+            }}
+            .ticket-footer .message {{
+                color: #e8d5b7;
+                font-size: 12px;
+                font-weight: bold;
+                letter-spacing: 0.5px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="wrapper">
+            <div class="card">
+                <div class="card-content">
+                    <!-- Logo -->
+                    <div class="logo"> SmartCarthage</div>
+
+                    <!-- Greeting with user name -->
+                    <div class="greeting">Bienvenue</div>
+                    <div class="user-name">{username}</div>
+
+                    <!-- Message -->
+                    <p class="message">
+                        Nous avons reçu une demande de réinitialisation<br>
+                        de votre mot de passe.
+                    </p>
+
+                    <!-- Reset button -->
+                    <a href="{link}" class="button"> Réinitialiser</a>
+
+                    <!-- Security note -->
+                    <p class="security-note"> Ce lien expirera dans 1 heure</p>
+
+                    <!-- Ticket divider -->
+                    <div class="ticket-divider"></div>
+
+                    <!-- Ticket footer -->
+                    <div class="ticket-footer">
+                        <div class="copyright">© 2026 Study - Tous droits réservés</div>
+                        <div class="author">Créé par Achref Jnayeh</div>
+                        <div class="message">✨ Bonne chance champione dans vos apprentissages! ✨</div>
+                    </div>
+
+                    <!-- Main footer -->
+                    <div class="footer">
+                        © 2026 Study
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
     """
-    Retrieve IA history for current user
-    Optional filters: mode, subject
-    """
-    from sqlite_models import IaHistory, SessionLocal
 
-    try:
-        db_sqlite = SessionLocal()
-        query = db_sqlite.query(IaHistory).filter(IaHistory.user_id == current_user.id)
+    message = MessageSchema(
+        subject="🔐 Réinitialisation de votre mot de passe Study",
+        recipients=[user.email],
+        body=html_body,
+        subtype=MessageType.html
+    )
+    fm = FastMail(conf)
+    await fm.send_message(message)
+    return {"message": "Email envoyé !"}
 
-        if mode:
-            query = query.filter(IaHistory.mode == mode)
-        if subject:
-            query = query.filter(IaHistory.subject == subject)
+@app.post("/reset-password")
+def reset_password(reset_data: schemas.ResetPasswordUpdate, db: Session = Depends(get_db)):
+    # Vérifier que le token est valide
+    payload = auth.verify_token(reset_data.token)
+    if not payload:
+        raise HTTPException(status_code=400, detail="Le lien est invalide ou a expiré.")
 
-        items = query.order_by(IaHistory.timestamp.desc()).offset(offset).limit(limit).all()
-        total = db_sqlite.query(IaHistory).filter(IaHistory.user_id == current_user.id).count()
+    email = payload.get("sub")
+    if not email:
+        raise HTTPException(status_code=400, detail="Token invalide.")
 
-        return {
-            "items": [
-                {
-                    "id": item.id,
-                    "timestamp": item.timestamp.isoformat(),
-                    "mode": item.mode,
-                    "subject": item.subject,
-                    "input_text": item.input_text[:100] + "..." if len(item.input_text) > 100 else item.input_text,
-                    "result": item.result[:200] + "..." if len(item.result) > 200 else item.result,
-                }
-                for item in items
-            ],
-            "total": total,
-            "limit": limit,
-            "offset": offset
-        }
+    # Chercher l'utilisateur
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
 
-    except Exception as e:
-        logger.error(f"❌ Error retrieving IA history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+    # Mettre à jour le mot de passe
+    user.hashed_password = auth.hash_password(reset_data.new_password)
+    db.commit()
 
+    return {"message": "Mot de passe réinitialisé avec succès !"}
 
-@app.get("/api/ia-history/{history_id}")
-async def get_ia_history_detail(
-    history_id: int,
-    current_user: models.User = Depends(get_current_user)
+@app.get("/admin/users", response_model=List[schemas.UserOutAdmin])
+def get_admin_users(db: Session = Depends(get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Récupère la liste de tous les utilisateurs (sauf les admins)"""
+    return db.query(models.User).filter(models.User.is_admin == False).all()
+
+@app.post("/admin/users", response_model=schemas.UserOutAdmin, status_code=status.HTTP_201_CREATED)
+def admin_create_user(
+    user_data: schemas.AdminCreateUser,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
 ):
-    """Get full details of a specific IA history entry"""
-    from sqlite_models import IaHistory, SessionLocal
+    """L'admin crée un nouvel utilisateur"""
+    # Vérifier que l'email n'existe pas déjà
+    existing_user = db.query(models.User).filter(models.User.email == user_data.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
 
-    try:
-        db_sqlite = SessionLocal()
-        item = db_sqlite.query(IaHistory).filter(
-            IaHistory.id == history_id,
-            IaHistory.user_id == current_user.id
-        ).first()
+    # Créer le nouvel utilisateur
+    hashed_pwd = auth.hash_password(user_data.password)
+    new_user = models.User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_pwd,
+        fullname=user_data.fullname,
+        institution=user_data.institution,
+        region=user_data.region,
+        is_admin=user_data.is_admin
+    )
+    db.add(new_user)
+    db.flush()
 
-        if not item:
-            raise HTTPException(status_code=404, detail="History item not found")
+    # Créer les stats pour le nouvel utilisateur
+    new_stats = models.UserStats(user_id=new_user.id)
+    db.add(new_stats)
 
-        return {
-            "id": item.id,
-            "timestamp": item.timestamp.isoformat(),
-            "mode": item.mode,
-            "subject": item.subject,
-            "input_text": item.input_text,
-            "result": item.result,
-            "question": item.question,
-            "user_answer": item.user_answer,
-            "correction": item.correction,
-            "metadata": item.metadata
-        }
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
-    except Exception as e:
-        logger.error(f"❌ Error retrieving history detail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.delete("/api/ia-history/{history_id}")
-async def delete_ia_history(
-    history_id: int,
-    current_user: models.User = Depends(get_current_user)
+@app.delete("/admin/users/{email}", status_code=status.HTTP_200_OK)
+def admin_delete_user(
+    email: str,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
 ):
-    """Delete a specific IA history entry"""
-    from sqlite_models import IaHistory, SessionLocal
+    """L'admin supprime un utilisateur par son email"""
+    # On ne peut pas supprimer l'admin lui-même
+    if email == current_admin.email:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous supprimer vous-même")
 
-    try:
-        db_sqlite = SessionLocal()
-        item = db_sqlite.query(IaHistory).filter(
-            IaHistory.id == history_id,
-            IaHistory.user_id == current_user.id
-        ).first()
+    # Trouver l'utilisateur
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
 
-        if not item:
-            raise HTTPException(status_code=404, detail="History item not found")
+    # Supprimer l'utilisateur (les stats sont supprimées en cascade)
+    db.delete(user)
+    db.commit()
 
-        db_sqlite.delete(item)
-        db_sqlite.commit()
+    return {"message": f"Utilisateur {email} supprimé avec succès"}
 
-        logger.info(f"✅ Deleted IA history {history_id} for user {current_user.id}")
-
-        return {"status": "deleted", "id": history_id}
-
-    except Exception as e:
-        logger.error(f"❌ Error deleting history: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-# ─── AVATAR ENDPOINTS ───
-
-@app.get("/api/avatar")
-async def get_avatar(current_user: models.User = Depends(get_current_user)):
-    """Get user's avatar configuration"""
-    from sqlite_models import AvatarConfig, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-        config = db_sqlite.query(AvatarConfig).filter(
-            AvatarConfig.user_id == current_user.id
-        ).first()
-
-        if not config:
-            return {"status": "no_config"}
-
-        return {
-            "status": "found",
-            "config": config.config,
-            "updated_at": config.updated_at.isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error getting avatar: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.put("/api/avatar")
-async def save_avatar(
-    avatar_data: dict,
-    current_user: models.User = Depends(get_current_user)
+@app.put("/admin/users/{email}", response_model=schemas.UserOutAdmin)
+def admin_update_user(
+    email: str,
+    user_update: schemas.UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: models.User = Depends(get_current_admin)
 ):
-    """Save or update user's avatar configuration"""
-    from sqlite_models import AvatarConfig, SessionLocal
+    """L'admin modifie un utilisateur"""
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
 
-    try:
-        db_sqlite = SessionLocal()
+    # Mettre à jour les champs
+    update_data = user_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(user, key, value)
 
-        config = db_sqlite.query(AvatarConfig).filter(
-            AvatarConfig.user_id == current_user.id
-        ).first()
+    db.commit()
+    db.refresh(user)
+    return user
 
-        if not config:
-            config = AvatarConfig(
-                user_id=current_user.id,
-                config=avatar_data
-            )
-            db_sqlite.add(config)
-        else:
-            config.config = avatar_data
-            config.updated_at = datetime.utcnow()
+@app.get("/admin/stats")
+def get_admin_stats(db: Session = Depends(get_db), current_admin: models.User = Depends(get_current_admin)):
+    """Retourne les statistiques des utilisateurs groupées par région et université (normalisées)"""
+    users = db.query(models.User).filter(models.User.is_admin == False).all()
 
-        db_sqlite.commit()
+    # Grouper par région et université (normalisé en minuscules, affiché en capitalize)
+    by_region = {}
+    by_institution = {}
 
-        logger.info(f"✅ Avatar saved for user {current_user.id}")
+    for user in users:
+        # Ligne 1: Normaliser la région (minuscules, trim, puis capitalize)
+        region = (user.region or "Non spécifié").strip().lower()
+        normalized_region = region.capitalize() if region != "non spécifié" else "Non spécifié"
+        by_region[normalized_region] = by_region.get(normalized_region, 0) + 1
 
-        return {
-            "status": "saved",
-            "config": config.config,
-            "updated_at": config.updated_at.isoformat()
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error saving avatar: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-# ─── CHAT PERSISTENCE ENDPOINTS ───
-
-@app.post("/api/chat/messages")
-async def save_chat_message(
-    data: dict,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Save a chat message to persistent storage"""
-    from sqlite_models import ChatMessage, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-
-        msg = ChatMessage(
-            user_id=current_user.id,
-            session_id=data.get("session_id", str(uuid.uuid4())),
-            timestamp=datetime.utcnow(),
-            role=data.get("role", "user"),
-            content=data.get("content", "")
-        )
-
-        db_sqlite.add(msg)
-        db_sqlite.commit()
-        db_sqlite.refresh(msg)
-
-        logger.info(f"✅ Chat message saved for user {current_user.id}")
-
-        return {
-            "id": msg.id,
-            "timestamp": msg.timestamp.isoformat(),
-            "status": "saved"
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error saving chat message: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.get("/api/chat/messages")
-async def get_chat_messages(
-    session_id: str = None,
-    limit: int = 50,
-    offset: int = 0,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Get chat messages for current user"""
-    from sqlite_models import ChatMessage, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-        query = db_sqlite.query(ChatMessage).filter(ChatMessage.user_id == current_user.id)
-
-        if session_id:
-            query = query.filter(ChatMessage.session_id == session_id)
-
-        messages = query.order_by(ChatMessage.timestamp.asc()).offset(offset).limit(limit).all()
-        total = db_sqlite.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).count()
-
-        return {
-            "messages": [
-                {
-                    "id": msg.id,
-                    "role": msg.role,
-                    "content": msg.content,
-                    "timestamp": msg.timestamp.isoformat(),
-                    "session_id": msg.session_id
-                }
-                for msg in messages
-            ],
-            "total": total,
-            "limit": limit,
-            "offset": offset
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error retrieving chat messages: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.post("/api/chat/sessions")
-async def create_chat_session(current_user: models.User = Depends(get_current_user)):
-    """Create a new chat session"""
-    session_id = str(uuid.uuid4())
+        # Ligne 2: Normaliser l'université (minuscules, trim, puis capitalize)
+        institution = (user.institution or "Non spécifié").strip().lower()
+        normalized_institution = institution.capitalize() if institution != "non spécifié" else "Non spécifié"
+        by_institution[normalized_institution] = by_institution.get(normalized_institution, 0) + 1
 
     return {
-        "session_id": session_id,
-        "status": "created",
-        "created_at": datetime.utcnow().isoformat()
+        "total_users": len(users),
+        "by_region": by_region,
+        "by_institution": by_institution
     }
 
 
-@app.get("/api/chat/sessions")
-async def get_chat_sessions(
-    limit: int = 10,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Get list of recent chat sessions for current user"""
-    from sqlite_models import ChatMessage, SessionLocal
+# ══════════════════════════════════════════════════════════════
+# MODULE IA — RAISONNEMENT (Ollama / Mistral Streaming)
+# ══════════════════════════════════════════════════════════════
 
-    try:
-        db_sqlite = SessionLocal()
-
-        # Get unique sessions
-        sessions = db_sqlite.query(ChatMessage.session_id).filter(
-            ChatMessage.user_id == current_user.id
-        ).distinct().order_by(ChatMessage.timestamp.desc()).limit(limit).all()
-
-        return {
-            "sessions": [{"session_id": s[0]} for s in sessions],
-            "total": len(sessions)
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error retrieving chat sessions: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "mistral"
 
 
-# ─── PROGRESSION STATS ENDPOINTS ───
+def build_ia_prompt(mode: str, text: str, subject: str = "", user_answer: str = "", language: str = "fr") -> str:
+    lang = language.lower() if language else 'fr'
+    if lang not in ('fr', 'en', 'ar'):
+        lang = 'fr'
 
-@app.get("/api/progression/stats")
-async def get_progression_stats(current_user: models.User = Depends(get_current_user)):
-    """Get aggregated progression statistics for current user"""
-    from sqlite_models import UserProgression, SessionLocal, IaHistory
+    if mode == "resume":
+        if lang == 'en':
+            return (
+                f"You are an expert teacher in {subject}. "
+                f"Create a clear, structured and concise summary of the following text. "
+                f"Use headings, bullet points and key takeaways. "
+                f"Respond only in ENGLISH.\n\nText:\n{text}"
+            )
+        elif lang == 'ar':
+            return (
+                f"أنت معلم خبير في {subject}. "
+                f"قدم ملخصًا واضحًا ومنظمًا ومختصرًا للنص التالي. "
+                f"استخدم عناوين ونقاطًا رئيسية. "
+                f"أجب باللغة العربية فقط.\n\nالنص:\n{text}"
+            )
+        return (
+            f"Tu es un professeur expert en {subject}. "
+            f"Fais un résumé clair, structuré et concis du texte suivant. "
+            f"Utilise des titres, des puces et des points clés. "
+            f"Réponds uniquement en français.\n\nTexte:\n{text}"
+        )
+    elif mode == "qcm":
+        if lang == 'en':
+            return (
+                f"You are an expert quiz creator. Generate exactly 5 multiple choice questions based on the following text. "
+                f"Each question must have exactly 4 options and one correct answer. "
+                f"Respond ONLY with valid JSON, no extra text, in this exact format:\n"
+                f'[{{"question":"...","choices":["Option A","Option B","Option C","Option D"],"correct":0}}]\n'
+                f"Text:\n{text}"
+            )
+        elif lang == 'ar':
+            return (
+                f"أنت خبير في إنشاء الاختبارات. أنشئ 5 أسئلة اختيار من متعدد استنادًا إلى النص التالي. "
+                f"يجب أن تحتوي كل سؤال على 4 خيارات وإجابة صحيحة واحدة. "
+                f"أجب فقط بصيغة JSON صحيحة، بدون نص إضافي.\n"
+                f'[{{"question":"...","choices":["الخيار أ","الخيار ب","الخيار ج","الخيار د"],"correct":0}}]\n'
+                f"النص:\n{text}"
+            )
+        return (
+            f"Tu es un professeur. Génère exactement 5 questions QCM basées sur le texte suivant. "
+            f"Chaque question doit avoir exactement 4 choix et une seule bonne réponse. "
+            f"Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni apres, dans ce format exact:\n"
+            f'[{{"question":"...","choices":["Option A","Option B","Option C","Option D"],"correct":0}}]\n'
+            f"Texte:\n{text}"
+        )
+    elif mode == "qr_question":
+        if lang == 'en':
+            return (
+                f"You are an expert teacher. Ask ONE single meaningful question based on the following text to test the learner's understanding. "
+                f"Ask only the question, nothing else.\n\nText:\n{text}"
+            )
+        elif lang == 'ar':
+            return (
+                f"أنت معلم خبير. اطرح سؤالًا واحدًا فقط بناءً على النص التالي لاختبار فهم الطالب. "
+                f"اطرح السؤال فقط، دون أي نص إضافي.\n\nالنص:\n{text}"
+            )
+        return (
+            f"Tu es un professeur. Pose UNE seule question pertinente basée sur le texte suivant pour tester la compréhension de l'étudiant. "
+            f"Pose uniquement la question, rien d'autre.\n\nTexte:\n{text}"
+        )
+    elif mode == "qr_correct":
+        if lang == 'en':
+            return (
+                f"You are a kind expert teacher. Here is the reference text:\n{text}\n\n"
+                f"Student answer: {user_answer}\n\n"
+                f"Evaluate the answer. Say if it is correct or incorrect, explain why, and stay encouraging. "
+                f"Respond only in ENGLISH."
+            )
+        elif lang == 'ar':
+            return (
+                f"أنت معلم خبير وودود. إليك النص المرجعي:\n{text}\n\n"
+                f"إجابة الطالب: {user_answer}\n\n"
+                f"قيم الإجابة. قل إذا كانت صحيحة أم خاطئة واشرح لماذا. كن مشجعًا. "
+                f"أجب باللغة العربية فقط."
+            )
+        return (
+            f"Tu es un professeur bienveillant. Voici le contexte:\n\n"
+            f"Texte de référence:\n{text}\n\n"
+            f"Réponse de l'étudiant : {user_answer}\n\n"
+            f"Évalue la réponse. Dis si c'est correct ou incorrect, explique pourquoi. "
+            f"Sois encourageant. Réponds uniquement en français."
+        )
+    return text
 
-    try:
-        db_sqlite = SessionLocal()
 
-        # Check Redis cache first
-        if cache_manager:
-            cached_stats = cache_manager.get_progression_stats(current_user.id)
-            if cached_stats:
-                return cached_stats
-
-        # Get or create progression record
-        prog = db_sqlite.query(UserProgression).filter(
-            UserProgression.user_id == current_user.id
-        ).first()
-
-        if not prog:
-            prog = UserProgression(user_id=current_user.id, subjects={})
-            db_sqlite.add(prog)
-            db_sqlite.commit()
-
-        # Calculate stats from history
-        history = db_sqlite.query(IaHistory).filter(
-            IaHistory.user_id == current_user.id
-        ).all()
-
-        stats = {
-            "user_id": current_user.id,
-            "qcm_before": 0,
-            "qcm_after": 0,
-            "qr_score": 0,
-            "resume_count": len([h for h in history if h.mode == "resume"]),
-            "qcm_count": len([h for h in history if h.mode in ["qcm", "qcm_remedial"]]),
-            "qr_count": len([h for h in history if h.mode == "qr"]),
-            "chat_count": len([h for h in history if h.mode == "chat"]),
-            "subjects": {},
-            "last_activity": prog.last_activity.isoformat() if prog.last_activity else None,
-            "updated_at": datetime.utcnow().isoformat()
-        }
-
-        # Group by subject
-        for h in history:
-            if h.subject:
-                if h.subject not in stats["subjects"]:
-                    stats["subjects"][h.subject] = {"count": 0, "modes": []}
-                stats["subjects"][h.subject]["count"] += 1
-                stats["subjects"][h.subject]["modes"].append(h.mode)
-
-        # Cache the stats
-        if cache_manager:
-            cache_manager.set_progression_stats(current_user.id, stats)
-
-        return stats
-
-    except Exception as e:
-        logger.error(f"❌ Error getting progression stats: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+async def stream_ollama_response(prompt: str, is_json: bool = False):
+    """Stream from Ollama without caching (for chat, Q/R correction, etc.)."""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": 0.7, "num_predict": 2048, "top_k": 40, "top_p": 0.9, "num_ctx": 4096}
+    }
+    if is_json:
+        payload["format"] = "json"
+    async with httpx.AsyncClient(timeout=120.0) as client:
+        async with client.stream("POST", OLLAMA_URL, json=payload) as response:
+            full_text = ""
+            async for chunk in response.aiter_lines():
+                line = str(chunk)
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        token = str(data.get("response", ""))
+                        full_text += token
+                        done = bool(data.get("done", False))
+                        yield f"data: {json.dumps({'token': token, 'done': done})}\n\n"
+                        if done:
+                            yield f"data: {json.dumps({'token': '', 'done': True, 'full_text': full_text})}\n\n"
+                            break
+                    except json.JSONDecodeError:
+                        continue
 
 
-# ─── PLANNING ENDPOINTS ───
+async def stream_ollama_and_cache(prompt: str, is_json: bool, user_id: int, input_hash: str, mode: str, subject: str, input_text: str):
+    """Stream from Ollama and save completed response to IaCache."""
+    from sqlite_models import IaCache, SessionLocal as SqliteSession
+    full_text = ""
+    payload = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "stream": True,
+        "options": {"temperature": 0.7, "num_predict": 2048, "top_k": 40, "top_p": 0.9, "num_ctx": 4096}
+    }
+    if is_json:
+        payload["format"] = "json"
+    async with httpx.AsyncClient(timeout=300.0) as client:
+        async with client.stream("POST", OLLAMA_URL, json=payload) as response:
+            async for chunk in response.aiter_lines():
+                line = str(chunk)
+                if line.strip():
+                    try:
+                        data = json.loads(line)
+                        token = str(data.get("response", ""))
+                        full_text += token
+                        done = bool(data.get("done", False))
+                        yield f"data: {json.dumps({'token': token, 'done': done})}\n\n"
+                        if done:
+                            yield f"data: {json.dumps({'token': '', 'done': True, 'full_text': full_text})}\n\n"
+                            break
+                    except json.JSONDecodeError:
+                        continue
 
-@app.post("/api/planning/items")
-async def save_planning_item(
-    data: dict,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Save a planning item (note or event)"""
-    from sqlite_models import PlanningItem, SessionLocal
+    # Save to cache after streaming completes
+    if full_text.strip():
+        try:
+            db = SqliteSession()
+            cache_entry = IaCache(
+                user_id=user_id,
+                input_hash=input_hash,
+                mode=mode,
+                subject=subject or "",
+                input_text=input_text[:2000],
+                response=full_text,
+            )
+            db.add(cache_entry)
+            db.commit()
+            db.close()
+        except Exception as e:
+            print(f"⚠️ Cache save error: {e}")
 
-    try:
-        db_sqlite = SessionLocal()
 
-        item = PlanningItem(
-            id=data.get("id", str(uuid.uuid4())),
-            user_id=current_user.id,
-            date=data.get("date", ""),
-            item_type=data.get("type", "note"),
-            title=data.get("title", ""),
-            content=data.get("content", ""),
-            category=data.get("category", "etude"),
-            source=data.get("source", "manual"),
-            checked=data.get("checked", False),
-            created_at=datetime.utcnow()
+@app.post("/api/generate")
+async def ia_generate(request: Request, db: Session = Depends(get_db)):
+    from sqlite_models import IaCache, SessionLocal as SqliteSession
+    body = await request.json()
+    mode = body.get("mode", "resume")
+    text = body.get("text", "")
+    subject = body.get("subject", "")
+    user_answer = body.get("user_answer", "")
+    language = body.get("language", "fr")
+
+    # --- Cache lookup (only for cacheable modes without user_answer) ---
+    cacheable_modes = ("resume", "qcm", "qr_question", "qcm_remedial")
+    user_id = None
+
+    # Try to extract user from token
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            token = auth_header.split(" ", 1)[1]
+            payload = auth.verify_token(token)
+            email = payload.get("sub")
+            if email:
+                user = db.query(models.User).filter(models.User.email == email).first()
+                if user:
+                    user_id = user.id
+        except Exception:
+            pass
+
+    if user_id and mode in cacheable_modes and not user_answer:
+        sqlite_db = SqliteSession()
+        input_hash = IaCache.compute_hash(text, mode, subject, language)
+        try:
+            cached = sqlite_db.query(IaCache).filter(
+                IaCache.user_id == user_id,
+                IaCache.input_hash == input_hash,
+                IaCache.mode == mode,
+            ).first()
+
+            if cached:
+                # CACHE HIT — return instantly as JSON (no streaming needed)
+                from fastapi.responses import JSONResponse
+                response_data = {
+                    "cached": True,
+                    "full_text": cached.response,
+                    "mode": cached.mode,
+                    "subject": cached.subject or "",
+                }
+                sqlite_db.close()
+                return JSONResponse(content=response_data)
+        finally:
+            sqlite_db.close()
+
+    # --- CACHE MISS — stream from Ollama ---
+    prompt = build_ia_prompt(mode, text, subject, user_answer, language)
+    is_json = (mode == "qcm")
+
+    if user_id and mode in cacheable_modes and not user_answer:
+        input_hash = IaCache.compute_hash(text, mode, subject, language)
+        return StreamingResponse(
+            stream_ollama_and_cache(prompt, is_json, user_id, input_hash, mode, subject, text),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
+        )
+    else:
+        return StreamingResponse(
+            stream_ollama_response(prompt, is_json),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"}
         )
 
-        db_sqlite.add(item)
-        db_sqlite.commit()
 
-        logger.info(f"✅ Planning item saved for user {current_user.id}")
+@app.get("/api/health")
+async def ia_health():
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get("http://localhost:11434/api/tags")
+            models_list = resp.json().get("models", [])
+            return {"status": "ok", "ollama": True, "models": [m["name"] for m in models_list]}
+    except Exception:
+        return {"status": "ok", "ollama": False, "models": []}
+
+
+# ══════════════════════════════════════════════════════════════
+# MODULE OCR — Upload & Parse Schedule into Calendar Events
+# ══════════════════════════════════════════════════════════════
+
+# Add the parent folder (project root) to path so we can import ocr_hybrid
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
+
+@app.post("/api/ocr/schedule")
+async def ocr_schedule(file: UploadFile = File(...)):
+    """
+    Receives a file (PDF, image, DOCX), runs OCR via ocr_hybrid.py,
+    then uses Ollama to parse the extracted text into calendar events.
+    """
+    # Save uploaded file to temp
+    suffix = os.path.splitext(file.filename or "upload")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    raw_text = ""
+    try:
+        # Try importing and running OCR
+        try:
+            from ocr_hybrid import process_document
+            result = process_document(tmp_path, languages=["fr", "en"], verbose=False)
+            raw_text = result.full_text or ""
+        except ImportError:
+            # Fallback: just read text if it's a text-based file
+            raw_text = f"[OCR module not available] File received: {file.filename}"
+        except Exception as e:
+            raw_text = f"[OCR Error] {str(e)}"
+
+        if not raw_text.strip():
+            return {"events": [], "raw_text": "Aucun texte detecte dans le document."}
+
+        # Use Ollama to parse the text into events
+        events = []
+        try:
+            parse_prompt = (
+                "Tu es un assistant qui extrait les devoirs et cours d'un emploi du temps scolaire. "
+                "Analyse le texte suivant et retourne un JSON valide contenant une cle 'events' "
+                "avec une liste d'elements. "
+                "Chaque element doit avoir: "
+                "- title (nom du cours, devoir ou evenement), "
+                "- date (format YYYY-MM-DD si la date est visible dans le texte, sinon chaine vide \"\"), "
+                "- subject (la matiere si identifiable, sinon chaine vide \"\"), "
+                "- category (etude, revision, examen, ou loisir). "
+                "IMPORTANT: Si une date n'est pas clairement indiquee dans le texte, "
+                "mets une chaine vide pour le champ date. Ne devine PAS les dates. "
+                "Extrais TOUS les elements visibles, meme ceux sans date. "
+                "Reponds UNIQUEMENT avec le JSON, sans texte avant ni apres.\n\n"
+                f"Texte extrait:\n{raw_text[:3000]}\n\n"
+                "JSON:"
+            )
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": parse_prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {"temperature": 0.3, "num_predict": 1024}
+                })
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    response_text = data.get("response", "")
+                    try:
+                        parsed = json.loads(response_text)
+                        if isinstance(parsed, list):
+                            events = parsed
+                        elif isinstance(parsed, dict) and "events" in parsed:
+                            events = parsed["events"]
+                        elif isinstance(parsed, dict) and "evenements" in parsed:
+                            events = parsed["evenements"]
+                    except json.JSONDecodeError:
+                        pass
+        except Exception:
+            # Ollama not available — return raw text
+            pass
+
+        return {"events": events, "raw_text": raw_text[:5000]}
+
+    finally:
+        # Clean up temp file
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
+
+
+@app.post("/api/ocr/extract-text")
+async def ocr_extract_text(file: UploadFile = File(...)):
+    """
+    Receives a file (PDF, image, DOCX), runs OCR via ocr_hybrid.py,
+    then uses Ollama to clean/correct the extracted text.
+    Returns both the raw OCR text and the cleaned version.
+    Used by the Raisonnement page for file attachment.
+    """
+    suffix = os.path.splitext(file.filename or "upload")[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    raw_text = ""
+    cleaned_text = ""
+    try:
+        # Run OCR
+        try:
+            from ocr_hybrid import process_document
+            result = process_document(tmp_path, languages=["fr", "en"], verbose=False)
+            raw_text = result.full_text or ""
+        except ImportError:
+            raw_text = f"[OCR module not available] File received: {file.filename}"
+        except Exception as e:
+            raw_text = f"[OCR Error] {str(e)}"
+
+        if not raw_text.strip():
+            return {"raw_text": "", "cleaned_text": "", "error": "Aucun texte detecte dans le document."}
+
+        # Use Ollama to clean and correct the OCR text
+        cleaned_text = raw_text  # Default: use raw if Ollama fails
+        try:
+            clean_prompt = (
+                "Tu es un assistant specialise dans la correction de texte extrait par OCR. "
+                "Le texte suivant a ete extrait automatiquement d'un document (PDF, image ou Word). "
+                "Il peut contenir des erreurs d'OCR, des caracteres mal reconnus, ou un formatage casse. "
+                "Corrige les erreurs evidentes, ameliore la mise en forme, "
+                "et retourne le texte nettoye et bien structure. "
+                "Garde le contenu original intact - ne resume PAS, ne supprime PAS d'information. "
+                "Corrige seulement les erreurs de reconnaissance. "
+                "Reponds UNIQUEMENT avec le texte corrige, sans commentaire.\n\n"
+                f"Texte brut extrait par OCR:\n{raw_text[:4000]}"
+            )
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(OLLAMA_URL, json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": clean_prompt,
+                    "stream": False,
+                    "options": {"temperature": 0.2, "num_predict": 4096}
+                })
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    response_text = data.get("response", "")
+                    if response_text.strip():
+                        cleaned_text = response_text.strip()
+        except Exception:
+            # Ollama not available — use raw text
+            pass
 
         return {
-            "id": item.id,
-            "status": "saved",
-            "created_at": item.created_at.isoformat()
+            "raw_text": raw_text[:8000],
+            "cleaned_text": cleaned_text[:8000],
+            "filename": file.filename,
         }
 
-    except Exception as e:
-        logger.error(f"❌ Error saving planning item: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
     finally:
-        db_sqlite.close()
+        try:
+            os.unlink(tmp_path)
+        except Exception:
+            pass
 
 
-@app.get("/api/planning/items")
-async def get_planning_items(
-    date: str = None,
-    limit: int = 100,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Get planning items for current user"""
-    from sqlite_models import PlanningItem, SessionLocal
+# --- APIS FOR USER DATA ISOLATION (HISTORY, PLANNING, AVATAR) ---
+from typing import List
 
-    try:
-        db_sqlite = SessionLocal()
-        query = db_sqlite.query(PlanningItem).filter(PlanningItem.user_id == current_user.id)
+@app.get("/api/history", response_model=List[schemas.IaHistoryOut])
+def get_ia_history(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import IaHistory
+    return db.query(IaHistory).filter(IaHistory.user_id == current_user.id).order_by(IaHistory.timestamp.desc()).limit(50).all()
 
-        if date:
-            query = query.filter(PlanningItem.date == date)
+@app.post("/api/history", response_model=schemas.IaHistoryOut)
+def save_ia_history(history_in: schemas.IaHistoryCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import IaHistory
+    db_hist = IaHistory(user_id=current_user.id, **history_in.model_dump())
+    db.add(db_hist)
+    db.commit()
+    update_user_badges(db, current_user.id, history_in.mode)
+    db.refresh(db_hist)
+    return db_hist
 
-        items = query.order_by(PlanningItem.created_at.desc()).limit(limit).all()
+@app.delete("/api/history")
+def clear_ia_history(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    """Efface l'historique IA de l'utilisateur connecté."""
+    from sqlite_models import IaHistory
+    db.query(IaHistory).filter(IaHistory.user_id == current_user.id).delete()
+    db.commit()
+    return {"status": "ok"}
 
-        return {
-            "items": [
-                {
-                    "id": item.id,
-                    "date": item.date,
-                    "type": item.item_type,
-                    "title": item.title,
-                    "content": item.content,
-                    "category": item.category,
-                    "source": item.source,
-                    "checked": item.checked,
-                    "created_at": item.created_at.isoformat()
-                }
-                for item in items
-            ]
-        }
+@app.post("/api/chat/messages")
+def save_chat_message(message_in: schemas.ChatMessageCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    """Enregistre un message de chat pour l'utilisateur et la session en cours."""
+    from sqlite_models import ChatMessage
+    db_msg = ChatMessage(
+        user_id=current_user.id,
+        session_id=message_in.session_id,
+        role=message_in.role,
+        content=message_in.content,
+    )
+    db.add(db_msg)
+    db.commit()
+    db.refresh(db_msg)
+    return {
+        "id": db_msg.id,
+        "session_id": db_msg.session_id,
+        "role": db_msg.role,
+        "content": db_msg.content,
+        "timestamp": db_msg.timestamp,
+    }
 
-    except Exception as e:
-        logger.error(f"❌ Error retrieving planning items: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+@app.get("/api/chat/messages")
+def get_chat_messages(session_id: str, limit: int = 50, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    """Récupère l'historique de chat pour la session et l'utilisateur connectés."""
+    from sqlite_models import ChatMessage
+    messages = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.user_id == current_user.id, ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.timestamp.asc())
+        .limit(limit)
+        .all()
+    )
 
-
-@app.put("/api/planning/items/{item_id}")
-async def update_planning_item(
-    item_id: str,
-    data: dict,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Update a planning item"""
-    from sqlite_models import PlanningItem, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-        item = db_sqlite.query(PlanningItem).filter(
-            PlanningItem.id == item_id,
-            PlanningItem.user_id == current_user.id
-        ).first()
-
-        if not item:
-            raise HTTPException(status_code=404, detail="Planning item not found")
-
-        for key, value in data.items():
-            if key in ["title", "content", "category", "checked", "date"]:
-                setattr(item, key, value)
-
-        db_sqlite.commit()
-
-        logger.info(f"✅ Planning item {item_id} updated")
-
-        return {"status": "updated", "id": item.id}
-
-    except Exception as e:
-        logger.error(f"❌ Error updating planning item: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.delete("/api/planning/items/{item_id}")
-async def delete_planning_item(
-    item_id: str,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Delete a planning item"""
-    from sqlite_models import PlanningItem, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-        item = db_sqlite.query(PlanningItem).filter(
-            PlanningItem.id == item_id,
-            PlanningItem.user_id == current_user.id
-        ).first()
-
-        if not item:
-            raise HTTPException(status_code=404, detail="Planning item not found")
-
-        db_sqlite.delete(item)
-        db_sqlite.commit()
-
-        logger.info(f"✅ Planning item {item_id} deleted")
-
-        return {"status": "deleted", "id": item_id}
-
-    except Exception as e:
-        logger.error(f"❌ Error deleting planning item: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-# ─── EXPORT/IMPORT ENDPOINTS ───
-
-@app.get("/api/export/backup")
-async def export_backup(current_user: models.User = Depends(get_current_user)):
-    """Export all user data as JSON"""
-    from sqlite_models import IaHistory, ChatMessage, PlanningItem, AvatarConfig, UserProgression, SessionLocal, Backup
-
-    try:
-        db_sqlite = SessionLocal()
-
-        # Collect all data
-        ia_history = db_sqlite.query(IaHistory).filter(IaHistory.user_id == current_user.id).all()
-        chat_messages = db_sqlite.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).all()
-        planning_items = db_sqlite.query(PlanningItem).filter(PlanningItem.user_id == current_user.id).all()
-        avatar_config = db_sqlite.query(AvatarConfig).filter(AvatarConfig.user_id == current_user.id).first()
-        progression = db_sqlite.query(UserProgression).filter(UserProgression.user_id == current_user.id).first()
-
-        backup_data = {
-            "export_date": datetime.utcnow().isoformat(),
-            "user": {
-                "id": current_user.id,
-                "email": current_user.email,
-                "username": current_user.username,
-                "fullname": current_user.fullname or ""
-            },
-            "ia_history": [
-                {
-                    "id": h.id,
-                    "timestamp": h.timestamp.isoformat(),
-                    "mode": h.mode,
-                    "input_text": h.input_text,
-                    "subject": h.subject,
-                    "result": h.result,
-                    "question": h.question,
-                    "user_answer": h.user_answer,
-                    "correction": h.correction,
-                    "metadata": h.metadata
-                }
-                for h in ia_history
-            ],
-            "chat_messages": [
-                {
-                    "id": m.id,
-                    "session_id": m.session_id,
-                    "timestamp": m.timestamp.isoformat(),
-                    "role": m.role,
-                    "content": m.content
-                }
-                for m in chat_messages
-            ],
-            "planning_items": [
-                {
-                    "id": p.id,
-                    "date": p.date,
-                    "type": p.item_type,
-                    "title": p.title,
-                    "content": p.content,
-                    "category": p.category,
-                    "source": p.source,
-                    "checked": p.checked,
-                    "created_at": p.created_at.isoformat()
-                }
-                for p in planning_items
-            ],
-            "avatar": avatar_config.config if avatar_config else None,
-            "progression": {
-                "qcm_before": progression.qcm_before if progression else 0,
-                "qcm_after": progression.qcm_after if progression else 0,
-                "qr_score": progression.qr_score if progression else 0,
-                "resume_count": progression.resume_count if progression else 0,
-                "total_study_time": progression.total_study_time if progression else 0,
-                "subjects": progression.subjects if progression else {}
+    return {
+        "messages": [
+            {
+                "id": message.id,
+                "session_id": message.session_id,
+                "role": message.role,
+                "content": message.content,
+                "timestamp": message.timestamp,
             }
-        }
+            for message in messages
+        ]
+    }
 
-        # Save backup to database
-        backup_id = str(uuid.uuid4())
-        backup_json = json.dumps(backup_data)
+@app.get("/api/history/{item_id}")
+def get_ia_history_detail(item_id: int, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    """Get full detail of a single history item (for viewing past résumé/QCM/Q&R)."""
+    from sqlite_models import IaHistory
+    item = db.query(IaHistory).filter(IaHistory.id == item_id, IaHistory.user_id == current_user.id).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return item
 
-        backup = Backup(
-            id=backup_id,
-            user_id=current_user.id,
-            filename=f"backup_{current_user.email}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json",
-            data=backup_json,
-            size=len(backup_json)
-        )
+@app.delete("/api/cache")
+def clear_ia_cache(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    """Allow user to clear their own cache if they want fresh re-generation."""
+    from sqlite_models import IaCache
+    db.query(IaCache).filter(IaCache.user_id == current_user.id).delete()
+    db.commit()
+    return {"status": "ok"}
 
-        db_sqlite.add(backup)
-        db_sqlite.commit()
+@app.get("/api/planning/notes", response_model=List[schemas.PlanningItemOut])
+def get_planning_notes(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    return db.query(PlanningItem).filter(PlanningItem.user_id == current_user.id, PlanningItem.item_type == "note").order_by(PlanningItem.created_at.desc()).all()
 
-        logger.info(f"✅ Backup created for user {current_user.id}")
+@app.post("/api/planning/notes", response_model=schemas.PlanningItemOut)
+def save_planning_note(note_in: schemas.PlanningItemCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    db_note = db.query(PlanningItem).filter(PlanningItem.id == note_in.id, PlanningItem.user_id == current_user.id).first()
+    if db_note:
+        for k, v in note_in.model_dump().items():
+            setattr(db_note, k, v)
+    else:
+        db_note = PlanningItem(user_id=current_user.id, **note_in.model_dump())
+        db.add(db_note)
+    db.commit()
+    db.refresh(db_note)
+    return db_note
 
-        return {
-            "status": "backup_created",
-            "backup_id": backup_id,
-            "size": len(backup_json),
-            "data": backup_data
-        }
+@app.delete("/api/planning/notes/{item_id}")
+def delete_planning_note(item_id: str, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    db_note = db.query(PlanningItem).filter(PlanningItem.id == item_id, PlanningItem.user_id == current_user.id).first()
+    if db_note:
+        db.delete(db_note)
+        db.commit()
+    return {"status": "ok"}
 
-    except Exception as e:
-        logger.error(f"❌ Error exporting backup: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+@app.get("/api/planning/events", response_model=List[schemas.PlanningItemOut])
+def get_planning_events(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    return db.query(PlanningItem).filter(PlanningItem.user_id == current_user.id, PlanningItem.item_type == "event").order_by(PlanningItem.date.asc()).all()
 
+@app.post("/api/planning/events")
+def save_planning_events(events_in: List[schemas.PlanningItemCreate], db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    for ev in events_in:
+        db_ev = db.query(PlanningItem).filter(PlanningItem.id == ev.id, PlanningItem.user_id == current_user.id).first()
+        if db_ev:
+            for k, v in ev.model_dump().items():
+                setattr(db_ev, k, v)
+        else:
+            db_ev = PlanningItem(user_id=current_user.id, **ev.model_dump())
+            db.add(db_ev)
+    db.commit()
+    return {"status": "ok"}
 
-@app.post("/api/import/backup")
-async def import_backup(
-    data: dict,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Import backup data (Note: This overwrites existing data)"""
-    from sqlite_models import IaHistory, ChatMessage, PlanningItem, AvatarConfig, UserProgression, SessionLocal
+@app.delete("/api/planning/events/{item_id}")
+def delete_planning_event(item_id: str, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import PlanningItem
+    db_ev = db.query(PlanningItem).filter(PlanningItem.id == item_id, PlanningItem.user_id == current_user.id).first()
+    if db_ev:
+        db.delete(db_ev)
+        db.commit()
+    return {"status": "ok"}
 
-    try:
-        db_sqlite = SessionLocal()
+@app.get("/api/avatar")
+def get_avatar(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import AvatarConfig
+    db_av = db.query(AvatarConfig).filter(AvatarConfig.user_id == current_user.id).first()
+    if db_av:
+        return db_av.config
+    # Default config
+    return {"top":"shortFlat","hairColor":"2c1b18","eyes":"default","eyebrows":"defaultNatural","mouth":"default","facialHair":"none","clothing":"shirtCrewNeck","clothesColor":"262e33","accessories":"none","skinColor":"ffdbb4"}
 
-        # Clear existing data for this user (optional: could merge instead)
-        db_sqlite.query(IaHistory).filter(IaHistory.user_id == current_user.id).delete()
-        db_sqlite.query(ChatMessage).filter(ChatMessage.user_id == current_user.id).delete()
-        db_sqlite.query(PlanningItem).filter(PlanningItem.user_id == current_user.id).delete()
-
-        # Import IA history
-        for h in data.get("ia_history", []):
-            item = IaHistory(
-                user_id=current_user.id,
-                timestamp=datetime.fromisoformat(h.get("timestamp", str(datetime.utcnow()))),
-                mode=h.get("mode", ""),
-                input_text=h.get("input_text", ""),
-                subject=h.get("subject", ""),
-                result=h.get("result", ""),
-                question=h.get("question"),
-                user_answer=h.get("user_answer"),
-                correction=h.get("correction"),
-                metadata=h.get("metadata", {})
-            )
-            db_sqlite.add(item)
-
-        # Import chat messages
-        for m in data.get("chat_messages", []):
-            msg = ChatMessage(
-                user_id=current_user.id,
-                session_id=m.get("session_id", str(uuid.uuid4())),
-                timestamp=datetime.fromisoformat(m.get("timestamp", str(datetime.utcnow()))),
-                role=m.get("role", "user"),
-                content=m.get("content", "")
-            )
-            db_sqlite.add(msg)
-
-        # Import planning items
-        for p in data.get("planning_items", []):
-            item = PlanningItem(
-                id=p.get("id", str(uuid.uuid4())),
-                user_id=current_user.id,
-                date=p.get("date", ""),
-                item_type=p.get("type", "note"),
-                title=p.get("title", ""),
-                content=p.get("content", ""),
-                category=p.get("category", "etude"),
-                source=p.get("source", "manual"),
-                checked=p.get("checked", False),
-                created_at=datetime.fromisoformat(p.get("created_at", str(datetime.utcnow())))
-            )
-            db_sqlite.add(item)
-
-        # Commit all changes
-        db_sqlite.commit()
-
-        # Invalidate user cache
-        if cache_manager:
-            cache_manager.invalidate_user_cache(current_user.id)
-
-        logger.info(f"✅ Data imported for user {current_user.id}")
-
-        return {
-            "status": "import_successful",
-            "items_imported": {
-                "ia_history": len(data.get("ia_history", [])),
-                "chat_messages": len(data.get("chat_messages", [])),
-                "planning_items": len(data.get("planning_items", []))
-            }
-        }
-
-    except Exception as e:
-        db_sqlite.rollback()
-        logger.error(f"❌ Error importing backup: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
+@app.post("/api/avatar")
+def save_avatar(config: schemas.AvatarConfigSchema, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
+    from sqlite_models import AvatarConfig
+    db_av = db.query(AvatarConfig).filter(AvatarConfig.user_id == current_user.id).first()
+    if db_av:
+        db_av.config = config.model_dump()
+    else:
+        db_av = AvatarConfig(user_id=current_user.id, config=config.model_dump())
+        db.add(db_av)
+    db.commit()
+    return db_av.config
 
 
-@app.get("/api/backups")
-async def get_backups(
-    limit: int = 10,
-    current_user: models.User = Depends(get_current_user)
-):
-    """Get list of user's backups"""
-    from sqlite_models import Backup, SessionLocal
-
-    try:
-        db_sqlite = SessionLocal()
-        backups = db_sqlite.query(Backup).filter(
-            Backup.user_id == current_user.id
-        ).order_by(Backup.created_at.desc()).limit(limit).all()
-
-        return {
-            "backups": [
-                {
-                    "id": b.id,
-                    "filename": b.filename,
-                    "size": b.size,
-                    "created_at": b.created_at.isoformat()
-                }
-                for b in backups
-            ],
-            "total": len(backups)
-        }
-
-    except Exception as e:
-        logger.error(f"❌ Error retrieving backups: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db_sqlite.close()
-
-
-@app.get("/api/redis/health")
-async def redis_health():
-    """Check Redis connection status"""
-    if not cache_manager:
-        return {
-            "status": "disconnected",
-            "message": "Redis is not connected"
-        }
-
-    return test_redis_connection(redis_client)
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000, reload=False)

@@ -1,0 +1,109 @@
+# Cache IA + Persistance Complète des Données Utilisateur
+
+## Objectif
+
+Deux fonctionnalités principales :
+
+1. **Persistance complète** — Toutes les données IA (résumé, QCM, Q/R + réponses) sont sauvegardées en BDD par utilisateur et consultables à tout moment.
+2. **Cache intelligent (type Redis)** — Si un utilisateur génère un résumé/QCM/Q&R avec le **même texte + même mode + même matière**, le résultat est retourné instantanément depuis la BDD sans attendre Ollama.
+
+## Architecture Proposée
+
+```mermaid
+sequenceDiagram
+    participant F as Frontend
+    participant B as Backend API
+    participant C as Cache SQLite
+    participant O as Ollama
+
+    F->>B: POST /api/generate (mode, text, subject)
+    B->>C: Lookup cache (hash du text + mode + subject)
+    alt Cache HIT
+        C-->>B: Réponse cachée
+        B-->>F: Retour instantané (pas de streaming)
+    else Cache MISS
+        B->>O: Stream prompt
+        O-->>B: Tokens en streaming
+        B-->>F: Streaming normal
+        B->>C: Sauvegarder la réponse
+    end
+```
+
+> [!IMPORTANT]
+> Le cache est basé sur un **hash MD5** du texte d'entrée + mode + matière. Deux textes identiques avec la même matière et le même mode = cache hit instantané.
+
+## Proposed Changes
+
+### Backend — Modèle de cache SQLite
+
+#### [MODIFY] [sqlite_models.py](file:///c:/Users/jnaye/projet_pfe_study/study_backend/sqlite_models.py)
+
+Ajouter un modèle `IaCache` :
+- `id` (PK auto)
+- `user_id` (Integer, indexé) — le cache est par utilisateur
+- `input_hash` (String, indexé) — MD5 du `text + mode + subject`
+- `mode` (String) — resume, qcm, qr, etc.
+- `subject` (String)
+- `input_text` (Text) — le texte original (pour affichage)
+- `response` (Text) — la réponse complète d'Ollama
+- `created_at` (DateTime)
+
+Index composite sur `(user_id, input_hash, mode)` pour des lookups ultra-rapides.
+
+---
+
+### Backend — Endpoint `/api/generate` avec cache
+
+#### [MODIFY] [main.py](file:///c:/Users/jnaye/projet_pfe_study/study_backend/main.py)
+
+1. **Modifier `POST /api/generate`** pour :
+   - Accepter un token JWT optionnel (Authorization header)
+   - Calculer le hash de `text + mode + subject`
+   - Chercher dans `IaCache` si une entrée existe pour cet `(user_id, hash, mode)`
+   - **Si cache HIT** → retourner la réponse directement en JSON `{ cached: true, full_text: "..." }`
+   - **Si cache MISS** → streamer normalement depuis Ollama, puis sauvegarder dans `IaCache`
+
+2. **Ajouter `GET /api/history/detail/{id}`** :
+   - Retourne un item d'historique complet (avec résultat, question, réponse)
+   - Pour consulter n'importe quel résumé/QCM/Q&R passé
+
+3. **L'historique existant (`POST /api/history`)** reste inchangé — il sert à lister les activités.
+
+---
+
+### Frontend — Vérification du cache avant streaming
+
+#### [MODIFY] [api_ia.ts](file:///c:/Users/jnaye/projet_pfe_study/study/src/utils/api_ia.ts)
+
+Modifier `fetchStream()` pour :
+1. **Avant** de lancer le streaming, faire un `POST /api/generate` qui vérifie le cache
+2. Si la réponse contient `{ cached: true, full_text: "..." }` → appeler directement `onDone(full_text)` sans streaming
+3. Sinon → streaming normal comme actuellement
+
+Le changement est **transparent** pour les composants React — ils utilisent toujours les mêmes callbacks `onToken`/`onDone`.
+
+---
+
+### Frontend — Consultation de l'historique complet
+
+#### [MODIFY] [RaisonnementPage.tsx](file:///c:/Users/jnaye/projet_pfe_study/study/src/components/RaisonnementPage.tsx)
+
+Quand l'utilisateur sélectionne un item historique :
+- Si c'est un **résumé** → afficher directement le contenu `result` sans re-générer
+- Si c'est un **QCM** → afficher le QCM tel quel avec les scores
+- Si c'est un **Q/R** → afficher la question + réponse de l'étudiant + correction
+
+Actuellement `handleHistorySelect` ne remplit que le texte. On l'améliorera pour **afficher le résultat directement**.
+
+---
+
+## Vérification Plan
+
+### Automated Tests
+- `npm run build` pour vérifier la compilation TypeScript
+- Tester un scénario : générer un résumé → regénérer le même → vérifier que c'est instantané
+
+### Manual Verification
+- Se connecter avec User A, générer un résumé → vérifier qu'il est dans l'historique
+- Regénérer le même résumé → doit être instantané (< 100ms)
+- Se connecter avec User B → ne doit PAS voir le cache de User A

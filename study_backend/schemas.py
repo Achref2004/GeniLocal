@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict, Any, List, Literal
 
 # 1. Inscription
 class UserCreate(BaseModel):
@@ -52,7 +52,18 @@ class UserOutAdmin(BaseModel):
     class Config:
         from_attributes = True
 
-# 5. Schéma pour créer un utilisateur (admin)
+# 5. User Stats
+class UserStatsOut(BaseModel):
+    total_study_seconds: int
+    days_present: int
+    average_qcm_score: float
+    documents_analyzed: int
+    badges: str
+
+    class Config:
+        from_attributes = True
+
+# 6. Schéma pour créer un utilisateur (admin)
 class AdminCreateUser(BaseModel):
     username: str
     email: EmailStr
@@ -69,3 +80,67 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordUpdate(BaseModel):
     token: str
     new_password: str
+
+# 7. Avatar Config
+from typing import Dict, Any, List
+
+class AvatarConfigSchema(BaseModel):
+    top: str
+    hairColor: str
+    eyes: str
+    eyebrows: str
+    mouth: str
+    facialHair: str
+    clothing: str
+    clothesColor: str
+    accessories: str
+    skinColor: str
+
+    class Config:
+        from_attributes = True
+
+# 8. IA History
+class IaHistoryCreate(BaseModel):
+    mode: str
+    input_text: str
+    subject: Optional[str] = None
+    result: str
+    question: Optional[str] = None
+    user_answer: Optional[str] = None
+    correction: Optional[str] = None
+    meta_data: Optional[Dict[str, Any]] = None
+
+class IaHistoryOut(IaHistoryCreate):
+    id: int
+    timestamp: Any
+
+    class Config:
+        from_attributes = True
+
+# 8.5 Chat messages
+class ChatMessageCreate(BaseModel):
+    session_id: str
+    role: Literal['user', 'assistant']
+    content: str
+
+class ChatMessageOut(ChatMessageCreate):
+    id: int
+    timestamp: Any
+
+    class Config:
+        from_attributes = True
+
+# 9. Planning Item
+class PlanningItemCreate(BaseModel):
+    id: str
+    date: str
+    item_type: str
+    title: str
+    content: Optional[str] = None
+    category: str
+    source: str
+    checked: bool = False
+
+class PlanningItemOut(PlanningItemCreate):
+    class Config:
+        from_attributes = True

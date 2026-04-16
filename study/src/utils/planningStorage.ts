@@ -57,133 +57,187 @@ export interface RaisonnementHistoryItem {
   correction?: string;
 }
 
-// ─── Storage Keys ───────────────────────────────────────────
-
-const NOTES_KEY = 'study_planning_notes';
-const EVENTS_KEY = 'study_planning_events';
-const IA_HISTORY_KEY = 'study_ia_history';
+const API_BASE = 'http://localhost:8000/api';
 
 // ─── Notes CRUD ─────────────────────────────────────────────
 
-export function loadNotes(): PlanningNote[] {
+export async function loadNotes(): Promise<PlanningNote[]> {
   try {
-    const data = localStorage.getItem(NOTES_KEY);
-    return data ? JSON.parse(data) : [];
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/planning/notes`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) return await res.json();
   } catch {
-    return [];
   }
+  return [];
 }
 
-export function saveNote(note: Omit<PlanningNote, 'id' | 'createdAt'>): PlanningNote[] {
-  const notes = loadNotes();
-  const newNote: PlanningNote = {
-    ...note,
-    id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-    createdAt: new Date().toISOString(),
-  };
-  notes.unshift(newNote);
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  return notes;
+export async function saveNote(note: Omit<PlanningNote, 'id' | 'createdAt'>): Promise<PlanningNote[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const newNote = {
+        ...note,
+        id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        item_type: 'note'
+      };
+      await fetch(`${API_BASE}/planning/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(newNote)
+      });
+    }
+  } catch (e) { console.error(e); }
+  return await loadNotes();
 }
 
-export function updateNote(id: string, updates: Partial<PlanningNote>): PlanningNote[] {
-  const notes = loadNotes();
-  const idx = notes.findIndex(n => n.id === id);
-  if (idx !== -1) {
-    notes[idx] = { ...notes[idx], ...updates };
-    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  }
-  return notes;
+export async function updateNote(id: string, updates: Partial<PlanningNote>): Promise<PlanningNote[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const notes = await loadNotes();
+      const existing = notes.find(n => n.id === id);
+      if (existing) {
+        await fetch(`${API_BASE}/planning/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ ...existing, ...updates, item_type: 'note' })
+        });
+      }
+    }
+  } catch (e) { console.error(e); }
+  return await loadNotes();
 }
 
-export function deleteNote(id: string): PlanningNote[] {
-  let notes = loadNotes();
-  notes = notes.filter(n => n.id !== id);
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  return notes;
+export async function deleteNote(id: string): Promise<PlanningNote[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      await fetch(`${API_BASE}/planning/notes/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  } catch (e) { console.error(e); }
+  return await loadNotes();
 }
 
-export function toggleNoteChecked(id: string): PlanningNote[] {
-  const notes = loadNotes();
-  const idx = notes.findIndex(n => n.id === id);
-  if (idx !== -1) {
-    notes[idx].checked = !notes[idx].checked;
-    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  }
-  return notes;
+export async function toggleNoteChecked(id: string): Promise<PlanningNote[]> {
+  try {
+    const notes = await loadNotes();
+    const existing = notes.find(n => n.id === id);
+    if (existing) {
+      return await updateNote(id, { checked: !existing.checked });
+    }
+  } catch (e) { console.error(e); }
+  return await loadNotes();
 }
 
-export function getNotesForDate(date: string): PlanningNote[] {
-  return loadNotes().filter(n => n.date === date);
+export async function getNotesForDate(date: string): Promise<PlanningNote[]> {
+  const notes = await loadNotes();
+  return notes.filter(n => n.date === date);
 }
 
 // ─── Events CRUD ────────────────────────────────────────────
 
-export function loadEvents(): PlanningEvent[] {
+export async function loadEvents(): Promise<PlanningEvent[]> {
   try {
-    const data = localStorage.getItem(EVENTS_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function saveEvent(event: Omit<PlanningEvent, 'id'>): PlanningEvent[] {
-  const events = loadEvents();
-  const newEvent: PlanningEvent = {
-    ...event,
-    id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-  };
-  events.push(newEvent);
-  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
-  return events;
-}
-
-export function saveBulkEvents(newEvents: Omit<PlanningEvent, 'id'>[]): PlanningEvent[] {
-  const events = loadEvents();
-  for (const evt of newEvents) {
-    events.push({
-      ...evt,
-      id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/planning/events`, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
+    if (res.ok) return await res.json();
+  } catch {
   }
-  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
-  return events;
+  return [];
 }
 
-export function deleteEvent(id: string): PlanningEvent[] {
-  let events = loadEvents();
-  events = events.filter(e => e.id !== id);
-  localStorage.setItem(EVENTS_KEY, JSON.stringify(events));
-  return events;
+export async function saveEvent(event: Omit<PlanningEvent, 'id'>): Promise<PlanningEvent[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const newEvent = {
+        ...event,
+        id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        item_type: 'event'
+      };
+      await fetch(`${API_BASE}/planning/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify([newEvent])
+      });
+    }
+  } catch (e) { console.error(e); }
+  return await loadEvents();
 }
 
-export function getEventsForDate(date: string): PlanningEvent[] {
-  return loadEvents().filter(e => e.date === date);
+export async function saveBulkEvents(newEvents: Omit<PlanningEvent, 'id'>[]): Promise<PlanningEvent[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payloads = newEvents.map(evt => ({
+        ...evt,
+        id: `evt_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        item_type: 'event'
+      }));
+      await fetch(`${API_BASE}/planning/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payloads)
+      });
+    }
+  } catch (e) { console.error(e); }
+  return await loadEvents();
+}
+
+export async function deleteEvent(id: string): Promise<PlanningEvent[]> {
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      await fetch(`${API_BASE}/planning/events/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+    }
+  } catch (e) { console.error(e); }
+  return await loadEvents();
+}
+
+export async function getEventsForDate(date: string): Promise<PlanningEvent[]> {
+  const events = await loadEvents();
+  return events.filter(e => e.date === date);
 }
 
 // ─── Raisonnement Sync ──────────────────────────────────────
 
-export function getRaisonnementForDate(date: string): RaisonnementHistoryItem[] {
+export async function getRaisonnementForDate(date: string): Promise<RaisonnementHistoryItem[]> {
   try {
-    const data = localStorage.getItem(IA_HISTORY_KEY);
-    if (!data) return [];
-    const history: RaisonnementHistoryItem[] = JSON.parse(data);
-    return history.filter(item => {
-      if (!item.timestamp) return false;
-      const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
-      return itemDate === date;
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
+    if (res.ok) {
+        const history: RaisonnementHistoryItem[] = await res.json();
+        return history.filter(item => {
+          if (!item.timestamp) return false;
+          const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
+          return itemDate === date;
+        });
+    }
   } catch {
-    return [];
   }
+  return [];
 }
 
 // ─── Statistics ─────────────────────────────────────────────
 
-export function getStudiedDaysCount(month?: number, year?: number): number {
-  const notes = loadNotes();
-  const iaHistory = loadIAHistory();
+export async function getStudiedDaysCount(month?: number, year?: number): Promise<number> {
+  const notes = await loadNotes();
+  const iaHistory = await loadIAHistory();
 
   const days = new Set<string>();
 
@@ -208,13 +262,15 @@ export function getStudiedDaysCount(month?: number, year?: number): number {
   return days.size;
 }
 
-export function getMonthStats(month: number, year: number) {
-  const notes = loadNotes().filter(n => {
+export async function getMonthStats(month: number, year: number) {
+  const allNotes = await loadNotes();
+  const notes = allNotes.filter(n => {
     const d = new Date(n.date);
     return d.getMonth() === month && d.getFullYear() === year;
   });
 
-  const iaHistory = loadIAHistory().filter(item => {
+  const allIAHistory = await loadIAHistory();
+  const iaHistory = allIAHistory.filter(item => {
     if (!item.timestamp) return false;
     const d = new Date(item.timestamp);
     return d.getMonth() === month && d.getFullYear() === year;
@@ -226,7 +282,7 @@ export function getMonthStats(month: number, year: number) {
     + iaHistory.filter(i => i.mode === 'qcm').length;
   const objectifs = notes.filter(n => n.type === 'objectif');
   const objectifsCompleted = objectifs.filter(n => n.checked).length;
-  const studiedDays = getStudiedDaysCount(month, year);
+  const studiedDays = await getStudiedDaysCount(month, year);
 
   return {
     studiedDays,
@@ -238,13 +294,19 @@ export function getMonthStats(month: number, year: number) {
   };
 }
 
-function loadIAHistory(): RaisonnementHistoryItem[] {
+export async function loadIAHistory(): Promise<RaisonnementHistoryItem[]> {
   try {
-    const data = localStorage.getItem(IA_HISTORY_KEY);
-    return data ? JSON.parse(data) : [];
+    const token = localStorage.getItem('token');
+    if (!token) return [];
+    const res = await fetch(`${API_BASE}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+        return await res.json();
+    }
   } catch {
-    return [];
   }
+  return [];
 }
 
 // ─── Date Helpers ───────────────────────────────────────────
