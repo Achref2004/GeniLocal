@@ -433,14 +433,65 @@ export function loadHistory(): HistoryItem[] {
 
 export function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>): HistoryItem[] {
   const history = loadHistory();
-  history.unshift({
+  const newEntry: HistoryItem = {
     ...entry,
     id: Date.now(),
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  history.unshift(newEntry);
   if (history.length > MAX_HISTORY) history.pop();
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+
+  // Save to SQLite database asynchronously
+  saveToDatabaseAsync(newEntry).catch(err =>
+    console.warn('⚠️ Failed to save to database:', err)
+  );
+
   return history;
+}
+
+/**
+ * Save IA history entry to SQLite database via API
+ */
+async function saveToDatabaseAsync(entry: HistoryItem): Promise<void> {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      console.warn('⚠️ No auth token, skipping database save');
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/ia-history`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        mode: entry.mode,
+        input_text: entry.text || '',
+        subject: entry.subject || '',
+        result: entry.result || '',
+        question: entry.question,
+        user_answer: entry.userAnswer,
+        correction: entry.correction,
+        metadata: {
+          saved_from: 'frontend',
+          timestamp: entry.timestamp
+        }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Database save failed: ${response.status}`);
+    }
+
+    console.log('✅ IA history saved to database');
+  } catch (err) {
+    console.error('❌ Error saving to database:', err);
+    // Silently fail - localStorage is available anyway
+  }
 }
 
 export function clearHistory(): HistoryItem[] {

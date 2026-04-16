@@ -1,0 +1,111 @@
+{
+  "name": "pfe-study",
+  "version": "1.0.0",
+  "description": "PFE Study - Learning Platform Desktop Application",
+  "main": "electron/main.js",
+  "homepage": "./",
+  "author": {
+    "name": "PFE Study Team"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:linux": "npm run build && electron-builder --linux",
+    "electron:publish": "npm run build && electron-builder --publish always"
+  },
+  "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.2",
+    "axios": "^1.13.6",
+    "framer-motion": "^12.35.0",
+    "jwt-decode": "^4.0.0",
+    "lucide-react": "^0.577.0",
+    "mark.js": "^8.11.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^9.1.0",
+    "react-router-dom": "^7.13.1",
+    "recharts": "^3.8.1",
+    "tailwindcss": "^3.4.19"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.1",
+    "autoprefixer": "^10.4.27",
+    "concurrently": "^8.2.1",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4",
+    "electron-is-dev": "^3.0.1",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "postcss": "^8.5.8",
+    "tree-kill": "^1.2.2",
+    "vite": "^7.3.1",
+    "wait-on": "^7.0.1"
+  },
+  "build": {
+    "appId": "com.pfestudy.app",
+    "productName": "PFE Study",
+    "files": [
+      "electron/**/*",
+      "study/dist/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "certificateFile": null,
+      "certificatePassword": null,
+      "signingHashAlgorithms": [
+        "sha256"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PFE Study"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.education"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Education"
+    }
+  }
+}

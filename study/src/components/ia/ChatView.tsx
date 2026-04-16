@@ -19,27 +19,91 @@ interface ChatViewProps {
 
 const MAX_MESSAGES_PER_DAY_CONST = MAX_MESSAGES_PER_DAY;
 
+// Save chat message to database
+async function saveChatMessageToDatabase(message: ChatMessage, sessionId: string): Promise<void> {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) return;
+
+    await fetch('http://localhost:8000/api/chat/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        session_id: sessionId,
+        role: message.role,
+        content: message.content
+      })
+    });
+  } catch (err) {
+    console.warn('⚠️ Failed to save chat message to database:', err);
+  }
+}
+
+// Load chat history from database
+async function loadChatHistoryFromDatabase(sessionId: string): Promise<ChatMessage[]> {
+  try {
+    const token = localStorage.getItem('access_token');
+    if (!token) return [];
+
+    const response = await fetch(
+      `http://localhost:8000/api/chat/messages?session_id=${sessionId}&limit=50`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    return data.messages.map((msg: any) => ({
+      id: Math.random() * 10000,
+      role: msg.role,
+      content: msg.content,
+      timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+    }));
+  } catch (err) {
+    console.warn('⚠️ Failed to load chat history:', err);
+    return [];
+  }
+}
+
 export default function ChatView({ text, subject, onMessagesSent }: ChatViewProps) {
   const { dark, T } = useTheme();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [userMessageCount, setUserMessageCount] = useState(0);
+  const [sessionId] = useState(() => {
+    const stored = sessionStorage.getItem('chat_session_id');
+    return stored || `session_${Date.now()}`;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
-  // Initialiser le compteur + message salut
+  // Initialiser le compteur + charger historique
   useEffect(() => {
     setUserMessageCount(getMessageCount());
-    if (messages.length === 0) {
-      const salut: ChatMessage = {
-        id: Date.now(),
-        role: 'assistant',
-        content: ` Salut khouya! Je suis là pour discuter de ${subject}. Tu peux me poser tes questions!`,
-        timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages([salut]);
-    }
+
+    // Try to load from database first
+    loadChatHistoryFromDatabase(sessionId).then(dbMessages => {
+      if (dbMessages.length > 0) {
+        setMessages(dbMessages);
+      } else if (messages.length === 0) {
+        // Only show greeting if no messages
+        const salut: ChatMessage = {
+          id: Date.now(),
+          role: 'assistant',
+          content: ` Salut khouya! Je suis là pour discuter de ${subject}. Tu peux me poser tes questions!`,
+          timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        };
+        setMessages([salut]);
+      }
+    });
   }, []);
 
   // Auto-scroll vers le dernier message
@@ -83,6 +147,11 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
     setInputValue('');
     setIsLoading(true);
 
+    // Save user message to database
+    saveChatMessageToDatabase(userMessage, sessionId).catch(err =>
+      console.warn('Failed to save user message:', err)
+    );
+
     // Incrémenter le compteur
     const newCount = incrementMessageCount();
     setUserMessageCount(newCount);
@@ -114,6 +183,13 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         setMessages(prev => prev.map(m =>
           m.id === assistantMessageId ? { ...m, content: fullText } : m
         ));
+
+        // Save assistant message to database
+        const finalMessage: ChatMessage = { ...assistantMessage, content: fullText };
+        saveChatMessageToDatabase(finalMessage, sessionId).catch(err =>
+          console.warn('Failed to save assistant message:', err)
+        );
+
         // Sauvegarder dans histoire
         saveToHistory({
           mode: 'qr',
@@ -135,7 +211,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         setMessages(prev => [...prev, errorMessage]);
       }
     );
-  }, [inputValue, isLoading, text, subject, onMessagesSent]);
+  }, [inputValue, isLoading, text, subject, onMessagesSent, sessionId];
 
   const remainingMessages = getRemainingMessages();
   const canSend = canSendMessage();
