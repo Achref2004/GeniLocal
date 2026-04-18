@@ -109,8 +109,10 @@ class PlanningItem(Base):
     user_id = Column(Integer, nullable=False, index=True)
     date = Column(String(10), nullable=False)  # YYYY-MM-DD
     item_type = Column(String(20), nullable=False)  # 'note' or 'event'
+    type = Column(String(50), default='libre')
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=True)
+    subject = Column(String(255), nullable=True)
     category = Column(String(20), nullable=False)  # 'etude', 'revision', 'examen', 'loisir'
     source = Column(String(20), nullable=False)  # 'manual' or 'ocr'
     checked = Column(Boolean, default=False, nullable=False)

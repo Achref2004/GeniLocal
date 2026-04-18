@@ -24,7 +24,7 @@ export function SignUpPage() {
   // Correction : Ajout du type pour l'événement de saisie
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    if (error) setError(''); 
+    if (error) setError('');
   };
 
   // Correction : Ajout du type pour l'événement de soumission
@@ -69,16 +69,16 @@ export function SignUpPage() {
       style={{ perspective: '2500px' }}
     >
       <div className="relative flex w-full max-w-7xl h-[700px] rounded-lg shadow-2xl overflow-hidden bg-[#f4f1ea]">
-        
+
         {/* --- PAGE DE GAUCHE : DÉCORATIVE --- */}
         <div className="w-1/2 relative p-12 flex flex-col justify-center border-r border-[#d1cab5]/30">
           <div className="absolute inset-6 border border-[#cdaa6a]/30 rounded-sm pointer-events-none"></div>
-          
+
           <div className="relative z-10 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-6 bg-[#eae4d3] border border-[#cdaa6a] shadow-inner">
-              <BookOpen className="w-8 h-8 text-[#8a9a8f]" />
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 bg-[#eae4d3] border border-[#cdaa6a] shadow-inner overflow-hidden">
+              <img src="/assets/logo_genilocal.png" alt="Logo GeniLocal" className="w-14 h-14 object-contain" />
             </div>
-            
+
             <h2 className="font-serif text-3xl mb-2 text-[#3a3f3b]">Les Fondations</h2>
             <div className="h-px w-16 mx-auto bg-[#cdaa6a] mb-8"></div>
 
@@ -87,9 +87,9 @@ export function SignUpPage() {
             </p>
 
             <div className="w-full h-48 rounded-md overflow-hidden border-2 border-[#d1cab5] shadow-md">
-              <img 
+              <img
                 src="/assets/image2-signup.png"
-                alt="Inscription SmartCarthage"
+                alt="Inscription GeniLocal"
                 className="w-full h-full object-cover sepia-[0.3]"
               />
             </div>
@@ -115,7 +115,7 @@ export function SignUpPage() {
 
             {/* Affichage des erreurs */}
             {error && (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded flex items-center gap-2"
@@ -129,22 +129,22 @@ export function SignUpPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-serif text-[#4a524c]">Prénom</Label>
-                  <Input 
-                    name="firstName" 
-                    value={formData.firstName} 
-                    onChange={handleChange} 
+                  <Input
+                    name="firstName"
+                    value={formData.firstName}
+                    onChange={handleChange}
                     required
-                    className="bg-[#eae4d3]/50 border-[#d1cab5] focus:ring-[#8a9a8f]" 
+                    className="bg-[#eae4d3]/50 border-[#d1cab5] focus:ring-[#8a9a8f]"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-serif text-[#4a524c]">Nom</Label>
-                  <Input 
-                    name="lastName" 
-                    value={formData.lastName} 
-                    onChange={handleChange} 
+                  <Input
+                    name="lastName"
+                    value={formData.lastName}
+                    onChange={handleChange}
                     required
-                    className="bg-[#eae4d3]/50 border-[#d1cab5] focus:ring-[#8a9a8f]" 
+                    className="bg-[#eae4d3]/50 border-[#d1cab5] focus:ring-[#8a9a8f]"
                   />
                 </div>
               </div>
@@ -177,29 +177,29 @@ export function SignUpPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-serif text-[#4a524c]">Mot de passe</Label>
-                  <Input 
-                    name="password" 
-                    type="password" 
-                    value={formData.password} 
-                    onChange={handleChange} 
+                  <Input
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleChange}
                     required
-                    className="bg-[#eae4d3]/50 border-[#d1cab5]" 
+                    className="bg-[#eae4d3]/50 border-[#d1cab5]"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs font-serif text-[#4a524c]">Confirmer</Label>
-                  <Input 
-                    name="confirmPassword" 
-                    type="password" 
-                    value={formData.confirmPassword} 
-                    onChange={handleChange} 
+                  <Input
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
                     required
-                    className="bg-[#eae4d3]/50 border-[#d1cab5]" 
+                    className="bg-[#eae4d3]/50 border-[#d1cab5]"
                   />
                 </div>
               </div>
 
-              <Button 
+              <Button
                 type="submit"
                 disabled={loading}
                 className="w-full bg-gradient-to-r from-[#8a9a8f] to-[#708678] text-white font-serif py-6 shadow-lg hover:shadow-xl transition-all"
@@ -210,7 +210,7 @@ export function SignUpPage() {
 
             <div className="mt-8 text-center">
               <p className="text-sm text-[#5e6660] font-serif">
-                Déjà inscrit ?  
+                Déjà inscrit ?
                 <button onClick={() => navigate('/login')} className="ml-2 text-[#8a9a8f] font-bold hover:underline">
                   Retourner au Chapitre I
                 </button>

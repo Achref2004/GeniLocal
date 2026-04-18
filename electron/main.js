@@ -262,8 +262,8 @@ function setupMenu() {
           click: () => {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
-              title: 'SmartCarthage Desktop',
-              message: 'SmartCarthage - Learning Platform',
+              title: 'GeniLocal Desktop',
+              message: 'GeniLocal - Learning Platform',
               detail: 'Version 1.0.0\n\nA comprehensive study and learning platform with AI-powered features.',
             });
           },

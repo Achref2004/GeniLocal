@@ -4,7 +4,7 @@ import { useTheme } from '../reutilisable/Themecontext';
 import {
   Calendar, ChevronLeft, ChevronRight, Home, Plus, X, Upload, FileText,
   Check, Trash2, BookOpen, HelpCircle, Brain, Target, ClipboardList,
-  MessageSquare, BarChart3, Sun, Moon, ChevronDown, AlertCircle, CheckCircle2,
+  MessageSquare, BarChart3, Sun, Moon, ChevronDown, AlertCircle, CheckCircle2, Clock, TrendingUp
 } from 'lucide-react';
 import {
   type PlanningNote, type PlanningEvent, type NoteType, type EventCategory,
@@ -45,7 +45,7 @@ export default function PlanningPage() {
   }, []);
 
   // UI State
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(formatDateKey(new Date()));
   const [showNoteEditor, setShowNoteEditor] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [activeFilter, setActiveFilter] = useState<EventCategory | 'all'>('all');
@@ -62,6 +62,7 @@ export default function PlanningPage() {
     title: string;
     date: string; // YYYY-MM-DD or '' if not detected
     subject: string;
+    time: string; // e.g. '08:30-09:30'
     hasDate: boolean;
   }
   const [showOcrReview, setShowOcrReview] = useState(false);
@@ -259,6 +260,7 @@ export default function PlanningPage() {
               title: e.title || `Élément ${i + 1}`,
               date: isValidDate ? dateStr : '',
               subject: e.subject || e.matiere || '',
+              time: e.time || '',
               hasDate: isValidDate,
             });
           });
@@ -271,6 +273,7 @@ export default function PlanningPage() {
               title: line.trim().substring(0, 100),
               date: '',
               subject: '',
+              time: '',
               hasDate: false,
             });
           });
@@ -280,13 +283,13 @@ export default function PlanningPage() {
           setOcrItems(extracted);
           setShowOcrReview(true);
         } else {
-          setOcrResult('⚠️ Aucun élément détecté dans le document.');
+          setOcrResult('Erreur: Aucun élément détecté dans le document.');
         }
       } else {
-        setOcrResult('⚠️ Le serveur OCR n\'est pas disponible. Vérifiez que le backend tourne.');
+        setOcrResult('Erreur: Le serveur OCR n\'est pas disponible. Vérifiez que le backend tourne.');
       }
     } catch {
-      setOcrResult('⚠️ Impossible de contacter le serveur OCR. Vérifiez que le backend est lancé sur le port 8000.');
+      setOcrResult('Erreur: Impossible de contacter le serveur OCR. Vérifiez que le backend est lancé sur le port 8000.');
     } finally {
       setIsUploading(false);
     }
@@ -322,21 +325,23 @@ export default function PlanningPage() {
     let updatedNotes = notes;
 
     for (const item of validItems) {
+      const timeInfo = item.time ? `Créneau: ${item.time}` : '';
       updatedNotes = await saveNote({
         date: item.date,
         type: 'devoir',
         title: item.title,
-        content: `Importé via OCR`,
+        content: `Importé via OCR${timeInfo ? ' — ' + timeInfo : ''}`,
         subject: item.subject || undefined,
         category: 'etude',
         checked: false,
+        source: 'ocr',
       });
     }
 
     setNotes(updatedNotes);
     setShowOcrReview(false);
     setOcrItems([]);
-    setOcrResult(`✅ ${validItems.length} devoir(s) importé(s) dans le calendrier !`);
+    setOcrResult(`Succès: ${validItems.length} cours importé(s) dans le calendrier !`);
   }, [ocrItems, notes]);
 
   const allOcrItemsHaveDates = useMemo(() => {
@@ -692,10 +697,10 @@ export default function PlanningPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {[
-                { label: 'Jours étudiés', value: stats.studiedDays, icon: '📈', color: '#3b82f6' },
-                { label: 'Résumés', value: stats.resumeCount, icon: '📚', color: '#8b5cf6' },
-                { label: 'QCM réalisés', value: stats.quizCount, icon: '🧠', color: '#10b981' },
-                { label: 'Objectifs', value: `${stats.objectifsCompleted}/${stats.objectifsTotal}`, icon: '🎯', color: '#f59e0b' },
+                { label: 'Jours étudiés', value: stats.studiedDays, icon: <TrendingUp size={16} />, color: '#3b82f6' },
+                { label: 'Résumés', value: stats.resumeCount, icon: <BookOpen size={16} />, color: '#8b5cf6' },
+                { label: 'QCM réalisés', value: stats.quizCount, icon: <Brain size={16} />, color: '#10b981' },
+                { label: 'Objectifs', value: `${stats.objectifsCompleted}/${stats.objectifsTotal}`, icon: <Target size={16} />, color: '#f59e0b' },
               ].map((s, i) => (
                 <div key={i} className={`planning-stagger-${i + 1}`} style={{
                   background: `${T.card}80`,
@@ -745,6 +750,7 @@ export default function PlanningPage() {
               </div>
             )}
           </div>
+
 
           {/* ── Upload Section ── */}
           <div style={{ marginBottom: 24 }}>
@@ -827,9 +833,9 @@ export default function PlanningPage() {
                   <div className="planning-note-item" style={{
                     marginTop: 10, padding: '10px 12px',
                     borderRadius: 10, fontSize: '0.75rem',
-                    background: ocrResult.startsWith('✅') ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-                    border: `1px solid ${ocrResult.startsWith('✅') ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
-                    color: ocrResult.startsWith('✅') ? '#10b981' : '#f59e0b',
+                    background: ocrResult.startsWith('Succès') ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+                    border: `1px solid ${ocrResult.startsWith('Succès') ? 'rgba(16,185,129,0.3)' : 'rgba(245,158,11,0.3)'}`,
+                    color: ocrResult.startsWith('Succès') ? '#10b981' : '#f59e0b',
                     lineHeight: 1.5,
                   }}>
                     {ocrResult}
@@ -1455,12 +1461,12 @@ export default function PlanningPage() {
                       </button>
                     </div>
 
-                    {/* Date & Subject row */}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    {/* Date, Subject & Time row */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                       {/* Date input */}
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {item.hasDate ? '✅ Date détectée' : '⚠️ Date requise'}
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: item.hasDate ? '#10b981' : '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {item.hasDate ? <><CheckCircle2 size={12} /> Date détectée</> : <><AlertCircle size={12} /> Date requise</>}
                         </label>
                         <input
                           type="date"
@@ -1481,9 +1487,9 @@ export default function PlanningPage() {
                       </div>
 
                       {/* Subject input */}
-                      <div style={{ flex: 1 }}>
-                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Matière (optionnel)
+                      <div style={{ flex: 1, minWidth: 140 }}>
+                        <label style={{ fontSize: '0.6rem', fontWeight: 700, color: item.subject ? '#10b981' : T.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {item.subject ? <><CheckCircle2 size={12} /> Matière détectée</> : 'Matière (optionnel)'}
                         </label>
                         <input
                           list="ocr-subjects-list"
@@ -1492,16 +1498,37 @@ export default function PlanningPage() {
                           placeholder="Ex: Maths..."
                           style={{
                             width: '100%', padding: '7px 10px', marginTop: 3,
-                            borderRadius: 8, border: `1px solid ${T.border}`,
-                            background: `${T.card}60`, color: T.text,
+                            borderRadius: 8,
+                            border: `1px solid ${item.subject ? 'rgba(16,185,129,0.3)' : T.border}`,
+                            background: item.subject ? 'rgba(16,185,129,0.05)' : `${T.card}60`,
+                            color: T.text,
                             fontSize: '0.8rem', outline: 'none',
                             transition: 'border-color 0.3s',
                             boxSizing: 'border-box',
                           }}
                           onFocus={e => { e.currentTarget.style.borderColor = T.accent; }}
-                          onBlur={e => { e.currentTarget.style.borderColor = T.border; }}
+                          onBlur={e => { e.currentTarget.style.borderColor = item.subject ? 'rgba(16,185,129,0.3)' : T.border; }}
                         />
                       </div>
+
+                      {/* Time display */}
+                      {item.time && (
+                        <div style={{ minWidth: 100 }}>
+                          <label style={{ fontSize: '0.6rem', fontWeight: 700, color: T.accent, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <Clock size={12} /> Créneau
+                          </label>
+                          <div style={{
+                            padding: '7px 10px', marginTop: 3,
+                            borderRadius: 8,
+                            border: `1px solid ${T.accent}30`,
+                            background: `${T.accent}08`,
+                            color: T.text, fontSize: '0.8rem',
+                            fontWeight: 600,
+                          }}>
+                            {item.time}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1512,9 +1539,9 @@ export default function PlanningPage() {
                 <details style={{ marginTop: 16 }}>
                   <summary style={{
                     fontSize: '0.7rem', fontWeight: 600, color: T.textMuted,
-                    cursor: 'pointer', padding: '6px 0',
+                    cursor: 'pointer', padding: '6px 0', display: 'flex', alignItems: 'center', gap: 6
                   }}>
-                    📄 Voir le texte brut extrait
+                    <FileText size={14} /> Voir le texte brut extrait
                   </summary>
                   <div style={{
                     marginTop: 8, padding: '10px 12px',
@@ -1581,7 +1608,7 @@ export default function PlanningPage() {
                   onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
                 >
                   <ClipboardList size={16} />
-                  Importer {ocrItemsWithDates} devoir(s)
+                  Importer {ocrItemsWithDates} cours
                 </button>
               </div>
             </div>

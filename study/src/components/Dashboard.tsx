@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
     Sparkles, Brain, Calendar, Heart, Clock, TrendingUp, Award,
     BookOpen, Star, CheckCircle2, Sun, Moon, LogOut,
+    Book, Bot, Timer, FileText, Flame, Trophy, PenTool, Lightbulb, Gem, Crown, Target, Globe
 } from 'lucide-react';
 import Sidebar, { UserProfile } from '../reutilisable/Sidebar';
 import Footer from '../reutilisable/Footer';
@@ -61,8 +62,6 @@ const Dashboard: React.FC = () => {
     const [progressData, setProgressData] = useState<SubjectProgress[]>([]);
     const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
     const [showBadges, setShowBadges] = useState(false);
-    const saveTimer = useRef<NodeJS.Timeout | null>(null);
-    const lastPersistedSeconds = useRef<number>(0);
     const token = localStorage.getItem('token');
 
     const handleLogout = () => {
@@ -89,26 +88,6 @@ const Dashboard: React.FC = () => {
         }, 1000);
         return () => clearInterval(interval);
     }, []);
-
-    useEffect(() => {
-        if (!token) return;
-        if (saveTimer.current) clearTimeout(saveTimer.current);
-        const totalSeconds = stats.total_study_seconds || 0;
-        if (totalSeconds - lastPersistedSeconds.current < 10) return;
-        saveTimer.current = setTimeout(async () => {
-            try {
-                await axios.post('http://127.0.0.1:8000/api/progression', {
-                    total_study_seconds: totalSeconds,
-                }, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-                lastPersistedSeconds.current = totalSeconds;
-            } catch (error) {
-                console.warn('Impossible de sauvegarder le temps de session', error);
-            }
-        }, 5000);
-        return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-    }, [stats.total_study_seconds, token]);
 
     // Charger les données de progression depuis l'historique
     useEffect(() => {
@@ -184,7 +163,7 @@ const Dashboard: React.FC = () => {
                 librairie: <BookOpen size={56} />, psy: <Brain size={56} />, planning: <Calendar size={56} />,
             };
             const labels: Record<string, string> = {
-                librairie: 'Librairie', psy: 'Espace Psychologique', planning: 'Mon Planning',
+                planning: 'Mon Planning',
             };
             return (
                 <div style={{ ...card({ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 400, gap: 16 }), color: T.accent }}>
@@ -253,9 +232,9 @@ const Dashboard: React.FC = () => {
                        
                     </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
-                    <div style={card({ padding: '28px 24px', position: 'relative', overflow: 'hidden' })}>
-                        <div style={{ position: 'absolute', top: -40, right: -40, width: 160, height: 160, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.08 }} />
+                <div style={{ display: 'grid', gridTemplateColumns: '20fr 1fr', gap: 20, marginBottom: 24 }}>
+                    <div style={card({ padding: '28px 10px', position: 'relative', overflow: 'hidden' })}>
+                        <div style={{ position: 'absolute', top: -400, right: -40, width: 260, height: 160, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.08 }} />
                         <h3 style={{ fontWeight: 700, fontSize: 17, marginBottom: 20, color: T.textOnCard }}>Activité hebdomadaire</h3>
                         <div style={{ height: 250 }}>
                             <ResponsiveContainer width="100%" height="100%">
@@ -277,43 +256,109 @@ const Dashboard: React.FC = () => {
                     
                 </div>
 
-                {showBadges && (
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-                        <div style={{ width: 'min(760px, 100%)', maxHeight: '90vh', overflowY: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 24, padding: 28, boxShadow: '0 24px 68px rgba(0,0,0,0.22)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                {showBadges && (() => {
+                    const BADGE_CATALOG = [
+                        { title: 'Premier utilisation', icon: <Star size={22} />, color: '#f50b0bff', desc: 'Première action sur la plateforme' },
+                        { title: '+5 matières ajoutées', icon: <Book size={22} />, color: '#029a1eff', desc: '5 matières différentes ajoutées' },
+                        { title: 'Explorateur IA', icon: <Bot size={22} />, color: '#8b5cf6', desc: 'Première utilisation de l\'IA' },
+                        { title: 'Marathonien', icon: <Timer size={22} />, color: '#ef4444', desc: 'Plus d\'1 heure d\'étude cumulée' },
+                        { title: 'QCM Parfait', icon: <Target size={22} />, color: '#10b981', desc: 'Score de 100% sur un QCM' },
+                        { title: 'Importateur OCR', icon: <FileText size={22} />, color: '#06b6d4', desc: 'Premier import d\'emploi du temps' },
+                        { title: 'Organisateur', icon: <Calendar size={22} />, color: '#f97316', desc: '10 activités dans le planning' },
+                        { title: 'Noctambule', icon: <Moon size={22} />, color: '#6366f1', desc: 'Étude après 22h' },
+                        { title: 'Polyglotte', icon: <Globe size={22} />, color: '#14b8a6', desc: 'IA utilisée en 2+ langues' },
+                        { title: 'Série de 7 jours', icon: <Flame size={22} />, color: '#dc2626', desc: '7 jours consécutifs connecté' },
+                        { title: 'Maître QCM', icon: <Trophy size={22} />, color: '#eab308', desc: '20 QCM complétés' },
+                        { title: 'Résumeur Expert', icon: <PenTool size={22} />, color: '#a855f7', desc: '10 résumés générés' },
+                        { title: 'Curieux', icon: <Lightbulb size={22} />, color: '#0ea5e9', desc: '15 questions posées à l\'IA' },
+                        { title: 'Perfectionniste', icon: <Gem size={22} />, color: '#ec4899', desc: 'Score moyen QCM > 80%' },
+                        { title: 'Champion GeniLocal', icon: <Crown size={22} />, color: '#d97706', desc: '10 badges débloqués !' },
+                    ];
+                    return (
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                        <div style={{ width: 'min(820px, 95%)', maxHeight: '90vh', overflowY: 'auto', background: T.card, border: `1px solid ${T.border}`, borderRadius: 28, padding: 32, boxShadow: '0 32px 80px rgba(0,0,0,0.3)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
                                 <div>
-                                    <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: T.textOnCard }}>Badges SmartCarthage</h2>
-                                    <p style={{ margin: '8px 0 0', color: T.textOnCardMuted }}>Vos récompenses sont sauvegardées automatiquement.</p>
+                                    <h2 style={{ margin: 0, fontSize: 26, fontWeight: 900, color: T.textOnCard, display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        🏅 Badges GeniLocal
+                                    </h2>
+                                    <p style={{ margin: '8px 0 0', color: T.textOnCardMuted, fontSize: 14 }}>
+                                        {badgeList.length} / {BADGE_CATALOG.length} débloqué{badgeList.length > 1 ? 's' : ''}
+                                    </p>
                                 </div>
                                 <button
                                     onClick={() => setShowBadges(false)}
-                                    style={{ border: 'none', background: 'transparent', color: T.textOnCardMuted, cursor: 'pointer', fontSize: 18, fontWeight: 700 }}
+                                    style={{ width: 36, height: 36, borderRadius: 10, border: `1px solid ${T.border}`, background: 'transparent', color: T.textOnCardMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 700, transition: 'all 0.2s' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239,68,68,0.1)'; e.currentTarget.style.color = '#ef4444'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = T.textOnCardMuted; }}
                                 >✕</button>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
-                                {badgeList.length > 0 ? badgeList.map((badge, index) => (
-                                    <div key={index} style={{ padding: 18, borderRadius: 18, background: dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 140, 148, 0.07)', border: `1px solid ${T.border}` }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                                            <Award size={20} color={T.accent} />
-                                            <strong style={{ color: T.textOnCard }}>{badge}</strong>
+
+                            {/* Progress bar */}
+                            <div style={{ marginBottom: 28, padding: '16px 20px', borderRadius: 16, background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', border: `1px solid ${T.border}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: T.textOnCard }}>Progression</span>
+                                    <span style={{ fontSize: 13, fontWeight: 800, color: T.accent }}>{Math.round((badgeList.length / BADGE_CATALOG.length) * 100)}%</span>
+                                </div>
+                                <div style={{ height: 8, borderRadius: 4, background: dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)', overflow: 'hidden' }}>
+                                    <div style={{ height: '100%', width: `${(badgeList.length / BADGE_CATALOG.length) * 100}%`, borderRadius: 4, background: `linear-gradient(90deg, ${T.accent}, ${T.accentSoft})`, transition: 'width 0.5s ease' }} />
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
+                                {BADGE_CATALOG.map(badge => {
+                                    const unlocked = badgeList.includes(badge.title);
+                                    return (
+                                        <div key={badge.title} style={{
+                                            padding: '18px 16px', borderRadius: 20,
+                                            background: unlocked ? `${badge.color}10` : (dark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'),
+                                            border: `1px solid ${unlocked ? `${badge.color}35` : T.border}`,
+                                            opacity: unlocked ? 1 : 0.55,
+                                            transition: 'all 0.3s',
+                                            position: 'relative',
+                                            overflow: 'hidden',
+                                        }}>
+                                            {unlocked && <div style={{ position: 'absolute', top: -20, right: -20, width: 60, height: 60, background: badge.color, borderRadius: '50%', filter: 'blur(25px)', opacity: 0.2 }} />}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, position: 'relative', zIndex: 1 }}>
+                                                <div style={{
+                                                    width: 44, height: 44, borderRadius: 14,
+                                                    background: unlocked ? `linear-gradient(135deg, ${badge.color}, ${badge.color}88)` : (dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 22, filter: unlocked ? 'none' : 'grayscale(1)',
+                                                    boxShadow: unlocked ? `0 6px 16px ${badge.color}30` : 'none',
+                                                }}>
+                                                    {badge.icon}
+                                                </div>
+                                                <div>
+                                                    <p style={{ margin: 0, fontWeight: 800, fontSize: 14, color: unlocked ? badge.color : T.textOnCard }}>{badge.title}</p>
+                                                </div>
+                                            </div>
+                                            <p style={{ margin: 0, color: T.textOnCardMuted, fontSize: 12, lineHeight: 1.4, position: 'relative', zIndex: 1 }}>{badge.desc}</p>
+                                            <div style={{ marginTop: 10, position: 'relative', zIndex: 1 }}>
+                                                <span style={{
+                                                    display: 'inline-block', padding: '4px 10px', borderRadius: 999,
+                                                    background: unlocked ? badge.color : 'transparent',
+                                                    border: unlocked ? 'none' : `1px solid ${T.border}`,
+                                                    color: unlocked ? '#fff' : T.textOnCardMuted,
+                                                    fontSize: 11, fontWeight: 700,
+                                                }}>
+                                                    {unlocked ? '✓ Débloqué' : '🔒 Verrouillé'}
+                                                </span>
+                                            </div>
                                         </div>
-                                        <p style={{ margin: 0, color: T.textOnCardMuted, fontSize: 13 }}>Badge débloqué à partir de votre activité et de votre historique.</p>
-                                    </div>
-                                )) : (
-                                    <div style={{ gridColumn: '1 / -1', padding: 20, borderRadius: 18, background: dark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 140, 148, 0.07)', border: `1px solid ${T.border}` }}>
-                                        <p style={{ margin: 0, color: T.textOnCardMuted }}>Vous n'avez pas encore de badge. Utilisez l'IA pour gagner vos premiers points.</p>
-                                    </div>
-                                )}
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
-                )}
+                    );
+                })()}
 
                 {/* Bottom Cards */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     <div style={card({ padding: '28px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 18 })}>
                         <div>
-                            <h3 style={{ fontWeight: 700, fontSize: 17, color: T.textOnCard }}>Badges SmartCarthage</h3>
+                            <h3 style={{ fontWeight: 700, fontSize: 17, color: T.textOnCard }}>Badges GeniLocal</h3>
                             <p style={{ color: T.textOnCardMuted, fontSize: 14, fontWeight: 600, marginTop: 6 }}>Vos récompenses basées sur votre activité IA.</p>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12, width: '100%' }}>
@@ -435,7 +480,7 @@ const Dashboard: React.FC = () => {
                                 <Sparkles size={34} color={T.accent} fill={T.accent} /> Tableau de Bord
                             </h1>
                             <p style={{ color: T.textMuted, marginTop: 6, fontSize: 15, marginLeft: 46, fontWeight: 500 }}>
-                                Bienvenue, {user?.fullname || user?.username || 'Étudiant'} 👋
+                                Bienvenue, {user?.fullname || user?.username || 'Étudiant'} <span style={{ display: 'inline-block', animation: 'wave 2s infinite', transformOrigin: '70% 70%' }}>👋</span>
                             </p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -465,6 +510,7 @@ const Dashboard: React.FC = () => {
                 @keyframes birdFly { 0%{transform:translateX(0)} 100%{transform:translateX(110vw)} }
                 @keyframes birdFlyRtl { 0%{transform:translateX(0)} 100%{transform:translateX(-110vw)} }
                 @keyframes wingFlap { 0%{transform:rotate(-20deg)} 100%{transform:rotate(20deg)} }
+                @keyframes wave { 0% { transform: rotate(0.0deg) } 10% { transform: rotate(14.0deg) } 20% { transform: rotate(-8.0deg) } 30% { transform: rotate(14.0deg) } 40% { transform: rotate(-4.0deg) } 50% { transform: rotate(10.0deg) } 60% { transform: rotate(0.0deg) } 100% { transform: rotate(0.0deg) } }
                 ::-webkit-scrollbar{width:8px} ::-webkit-scrollbar-track{background:transparent}
                 ::-webkit-scrollbar-thumb{background:${T.accent}30;border-radius:10px}
             `}</style>

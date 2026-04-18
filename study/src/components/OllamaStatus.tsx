@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { checkOllamaAvailable, getModelInfo, OLLAMA_SETUP_GUIDE } from '../../utils/ollamaConfig';
+import { checkOllamaAvailable, getModelInfo, OLLAMA_SETUP_GUIDE } from '../utils/ollamaConfig';
+import { Loader, CheckCircle2, AlertTriangle, BookOpen } from 'lucide-react';
 
 export default function OllamaStatus() {
   const [available, setAvailable] = useState(false);
@@ -25,8 +26,9 @@ export default function OllamaStatus() {
 
   if (loading) {
     return (
-      <div style={{ padding: '16px', textAlign: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>⏳ Vérification Ollama...</p>
+      <div style={{ padding: '16px', textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <Loader size={16} color="#94a3b8" style={{ animation: 'spin 2s linear infinite' }} />
+        <p style={{ color: '#94a3b8', margin: 0 }}>Vérification Ollama...</p>
       </div>
     );
   }
@@ -42,7 +44,9 @@ export default function OllamaStatus() {
           fontSize: '0.875rem',
         }}
       >
-        <p style={{ color: '#22c55e', margin: '0 0 8px 0', fontWeight: '600' }}>✅ Ollama Actif (Hors Ligne)</p>
+        <p style={{ color: '#22c55e', margin: '0 0 8px 0', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <CheckCircle2 size={16} /> Ollama Actif (Hors Ligne)
+        </p>
         <p style={{ color: '#cbd5e1', margin: 0 }}>
           Modèle: <strong>{modelInfo.name}</strong> ({modelInfo.size})
         </p>
@@ -64,15 +68,17 @@ export default function OllamaStatus() {
         fontSize: '0.875rem',
       }}
     >
-      <p style={{ color: '#ef4444', margin: '0 0 12px 0', fontWeight: '600' }}>⚠️ Ollama Non Disponible</p>
+      <p style={{ color: '#ef4444', margin: '0 0 12px 0', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <AlertTriangle size={16} /> Ollama Non Disponible
+      </p>
       <p style={{ color: '#cbd5e1', margin: '0 0 12px 0', lineHeight: '1.5' }}>
         Le service Ollama n'est pas accessible sur <code>http://localhost:11434</code>. Les générations IA ne
         fonctionneront pas.
       </p>
 
       <details style={{ cursor: 'pointer' }}>
-        <summary style={{ color: '#06b6d4', fontWeight: '600', marginBottom: '8px', userSelect: 'none' }}>
-          📖 Instructions Installation
+        <summary style={{ color: '#06b6d4', fontWeight: '600', marginBottom: '8px', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <BookOpen size={16} /> Instructions Installation
         </summary>
         <pre
           style={{

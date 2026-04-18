@@ -70,10 +70,10 @@ export default function ProgressionPage() {
   };
 
   const getGradeLabel = (score: number) => {
-    if (score >= 0.8) return 'Excellent ✨';
-    if (score >= 0.65) return 'Bien 👍';
-    if (score >= 0.5) return 'Moyenne 📚';
-    return 'À réviser ⚠️';
+    if (score >= 0.8) return 'Excellent';
+    if (score >= 0.65) return 'Bien';
+    if (score >= 0.5) return 'Moyenne';
+    return 'À réviser';
   };
 
   const formatDate = (dateStr: string) => {
@@ -252,9 +252,9 @@ export default function ProgressionPage() {
 
                   {/* QCM Avant */}
                   <div style={{ textAlign: 'center' }}>
-                    {row.qcmBefore !== null ? (
+                    {row.qcmBeforeLabel !== null && row.qcmBefore !== null ? (
                       <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: getGradeColor(row.qcmBefore), margin: 0 }} title={getGradeLabel(row.qcmBefore)}>
-                        {(row.qcmBefore * 100).toFixed(0)}%
+                        {row.qcmBeforeLabel}
                       </p>
                     ) : (
                       <p style={{ color: T.textMuted, margin: 0 }}>—</p>
@@ -263,10 +263,10 @@ export default function ProgressionPage() {
 
                   {/* QCM Après */}
                   <div style={{ textAlign: 'center', position: 'relative' }}>
-                    {row.qcmAfter !== null ? (
+                    {row.qcmAfterLabel !== null && row.qcmAfter !== null ? (
                       <>
                         <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: getGradeColor(row.qcmAfter), margin: 0 }} title={getGradeLabel(row.qcmAfter)}>
-                          {(row.qcmAfter * 100).toFixed(0)}%
+                          {row.qcmAfterLabel}
                         </p>
                         {improvement !== null && (
                           <div
@@ -297,9 +297,9 @@ export default function ProgressionPage() {
 
                   {/* Q/R */}
                   <div style={{ textAlign: 'center' }}>
-                    {row.qrScore !== null ? (
+                    {row.qrScoreLabel !== null && row.qrScore !== null ? (
                       <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: getGradeColor(row.qrScore), margin: 0 }} title={getGradeLabel(row.qrScore)}>
-                        {(row.qrScore * 100).toFixed(0)}%
+                        {row.qrScoreLabel}
                       </p>
                     ) : (
                       <p style={{ color: T.textMuted, margin: 0 }}>—</p>

@@ -26,7 +26,7 @@ models.Base.metadata.create_all(bind=engine)
 from sqlite_models import Base as SqliteBase, engine as sqlite_engine, get_db as get_sqlite_db
 SqliteBase.metadata.create_all(bind=sqlite_engine)
 
-app = FastAPI(title="SmartCarthage API")
+app = FastAPI(title="GeniLocal API")
 
 # Middleware
 app.add_middleware(SessionMiddleware, secret_key="ton_secret_pour_les_sessions_etudes_achref")
@@ -53,7 +53,7 @@ conf = ConnectionConfig(
 
 @app.get("/")
 def home():
-    return {"message": "Bienvenue sur l'API de SmartCarthage"}
+    return {"message": "Bienvenue sur l'API de GeniLocal"}
 
 # --- AUTHENTICATION ---
 
@@ -294,12 +294,20 @@ def update_progression(prog_in: dict, db: Session = Depends(get_db), current_use
     if not db_stats:
         raise HTTPException(status_code=404, detail="Stats introuvables")
 
-    new_seconds = prog_in.get("total_study_seconds", db_stats.total_study_seconds)
-    db_stats.total_study_seconds = new_seconds
-    db_stats.days_present = new_seconds // 86400 
+    inc_sec = prog_in.get("increment_seconds", 0)
+    inc_pres = prog_in.get("increment_presence", 0)
+    
+    if inc_sec > 0:
+        db_stats.total_study_seconds += inc_sec
+    elif "total_study_seconds" in prog_in:
+        # Fallback to direct set for backwards compatibility if needed
+        db_stats.total_study_seconds = prog_in["total_study_seconds"]
+        
+    if inc_pres > 0:
+        db_stats.days_present += inc_pres
     
     db.commit()
-    return {"message": "Succès", "total_seconds": db_stats.total_study_seconds}
+    return {"message": "Succès", "total_seconds": db_stats.total_study_seconds, "days_present": db_stats.days_present}
 
 # --- AUTRES ROUTES ---
 
@@ -451,7 +459,7 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
             <div class="card">
                 <div class="card-content">
                     <!-- Logo -->
-                    <div class="logo"> SmartCarthage</div>
+                    <div class="logo"> GeniLocal</div>
 
                     <!-- Greeting with user name -->
                     <div class="greeting">Bienvenue</div>
@@ -897,13 +905,15 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-
 @app.post("/api/ocr/schedule")
 async def ocr_schedule(file: UploadFile = File(...)):
     """
     Receives a file (PDF, image, DOCX), runs OCR via ocr_hybrid.py,
-    then uses Ollama to parse the extracted text into calendar events.
+    then uses regex + AI to parse the extracted text into calendar events.
     """
+    import re as _re
+    from datetime import datetime as _dt
+
     # Save uploaded file to temp
     suffix = os.path.splitext(file.filename or "upload")[1]
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -919,7 +929,6 @@ async def ocr_schedule(file: UploadFile = File(...)):
             result = process_document(tmp_path, languages=["fr", "en"], verbose=False)
             raw_text = result.full_text or ""
         except ImportError:
-            # Fallback: just read text if it's a text-based file
             raw_text = f"[OCR module not available] File received: {file.filename}"
         except Exception as e:
             raw_text = f"[OCR Error] {str(e)}"
@@ -927,56 +936,171 @@ async def ocr_schedule(file: UploadFile = File(...)):
         if not raw_text.strip():
             return {"events": [], "raw_text": "Aucun texte detecte dans le document."}
 
-        # Use Ollama to parse the text into events
+        current_year = _dt.now().year
         events = []
-        try:
-            parse_prompt = (
-                "Tu es un assistant qui extrait les devoirs et cours d'un emploi du temps scolaire. "
-                "Analyse le texte suivant et retourne un JSON valide contenant une cle 'events' "
-                "avec une liste d'elements. "
-                "Chaque element doit avoir: "
-                "- title (nom du cours, devoir ou evenement), "
-                "- date (format YYYY-MM-DD si la date est visible dans le texte, sinon chaine vide \"\"), "
-                "- subject (la matiere si identifiable, sinon chaine vide \"\"), "
-                "- category (etude, revision, examen, ou loisir). "
-                "IMPORTANT: Si une date n'est pas clairement indiquee dans le texte, "
-                "mets une chaine vide pour le champ date. Ne devine PAS les dates. "
-                "Extrais TOUS les elements visibles, meme ceux sans date. "
-                "Reponds UNIQUEMENT avec le JSON, sans texte avant ni apres.\n\n"
-                f"Texte extrait:\n{raw_text[:3000]}\n\n"
-                "JSON:"
-            )
 
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(OLLAMA_URL, json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": parse_prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": 0.3, "num_predict": 1024}
-                })
+        # ══════════════════════════════════════════════════════
+        # STEP 1: Regex-based date extraction from raw text
+        # ══════════════════════════════════════════════════════
+        date_pattern = _re.compile(
+            r'(?:(?:Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi|Dimanche)\s+)?'
+            r'(\d{1,2})\s*[/\-\.]\s*(\d{1,2})\s*[/\-\.]\s*(\d{2,4})',
+            _re.IGNORECASE
+        )
+        time_pattern = _re.compile(r'\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}')
 
-                if resp.status_code == 200:
-                    data = resp.json()
-                    response_text = data.get("response", "")
-                    try:
-                        parsed = json.loads(response_text)
-                        if isinstance(parsed, list):
-                            events = parsed
-                        elif isinstance(parsed, dict) and "events" in parsed:
-                            events = parsed["events"]
-                        elif isinstance(parsed, dict) and "evenements" in parsed:
-                            events = parsed["evenements"]
-                    except json.JSONDecodeError:
-                        pass
-        except Exception:
-            # Ollama not available — return raw text
-            pass
+        date_matches = list(date_pattern.finditer(raw_text))
+
+        if date_matches:
+            print(f"[OCR] Found {len(date_matches)} dates via regex")
+
+            for i, match in enumerate(date_matches):
+                day = match.group(1).zfill(2)
+                month = match.group(2).zfill(2)
+                year_str = match.group(3)
+                year = year_str if len(year_str) == 4 else str(current_year)
+                date_iso = f"{year}-{month}-{day}"
+
+                # Validate date
+                try:
+                    _dt.strptime(date_iso, "%Y-%m-%d")
+                except ValueError:
+                    continue
+
+                # Get text section for this date (until next date or end)
+                start_pos = match.end()
+                end_pos = date_matches[i + 1].start() if i + 1 < len(date_matches) else len(raw_text)
+                section_text = raw_text[start_pos:end_pos]
+
+                # Extract time slots
+                times_found = time_pattern.findall(section_text)
+
+                # Remove time slots from text for cleaner parsing
+                cleaned = section_text
+                for t in times_found:
+                    cleaned = cleaned.replace(t, ' ')
+
+                # Split into parts by newlines, pipes, tabs
+                parts = _re.split(r'[\n\r\t|]+', cleaned)
+
+                # Filter meaningful course names
+                course_names = []
+                for part in parts:
+                    part = part.strip()
+                    if not part or len(part) < 3:
+                        continue
+                    if _re.match(r'^[\s\-\u2013\u2014.]+$', part):
+                        continue
+                    if _re.match(r'^\d{1,2}:\d{2}', part):
+                        continue
+                    if part in ['-', '--']:
+                        continue
+                    course_names.append(part)
+
+                # Create events from course names
+                time_idx = 0
+                for course_raw in course_names:
+                    # Separate professor name if present
+                    prof_match = _re.search(
+                        r'[(\n]\s*((?:Mr|Mme|Prof|Dr)\.?\s+.+?)(?:\)|$)',
+                        course_raw, _re.IGNORECASE
+                    )
+
+                    if prof_match:
+                        subject = course_raw[:prof_match.start()].strip().rstrip('(').strip()
+                        prof = prof_match.group(1).strip()
+                        title = f"{subject} - {prof}"
+                    else:
+                        lines = [l.strip() for l in course_raw.split('\n') if l.strip()]
+                        if len(lines) >= 2 and _re.match(r'^(?:Mr|Mme|Prof|Dr)\b', lines[-1], _re.IGNORECASE):
+                            subject = ' '.join(lines[:-1])
+                            title = f"{subject} - {lines[-1]}"
+                        else:
+                            subject = course_raw.strip()
+                            title = subject
+
+                    subject = _re.sub(r'\s+', ' ', subject).strip()
+                    title = _re.sub(r'\s+', ' ', title).strip()
+
+                    if not subject or len(subject) < 2:
+                        continue
+
+                    time_slot = times_found[time_idx] if time_idx < len(times_found) else ''
+                    time_idx += 1
+
+                    events.append({
+                        "title": title,
+                        "date": date_iso,
+                        "subject": subject,
+                        "time": time_slot,
+                        "category": "etude"
+                    })
+
+            print(f"[OCR] Regex extracted {len(events)} events")
+
+        # ══════════════════════════════════════════════════════
+        # STEP 2: Fallback to Ollama AI if regex found nothing
+        # ══════════════════════════════════════════════════════
+        if not events:
+            print("[OCR] No dates found via regex, falling back to Ollama AI...")
+            try:
+                parse_prompt = (
+                    "Extrait les cours de cet emploi du temps. "
+                    "Retourne un JSON: {\"events\": [{\"title\": \"...\", \"date\": \"YYYY-MM-DD\", "
+                    "\"subject\": \"...\", \"time\": \"\", \"category\": \"etude\"}]}. "
+                    f"Si l'annee manque, utilise {current_year}. "
+                    "Convertis les dates jj/mm/aaaa ou jj-mm-aaaa en YYYY-MM-DD. "
+                    f"Texte:\n{raw_text[:4000]}\nJSON:"
+                )
+
+                async with httpx.AsyncClient(timeout=90.0) as client:
+                    resp = await client.post(OLLAMA_URL, json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": parse_prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": 0.1, "num_predict": 2048}
+                    })
+
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        response_text = data.get("response", "")
+                        try:
+                            parsed = json.loads(response_text)
+                            if isinstance(parsed, list):
+                                events = parsed
+                            elif isinstance(parsed, dict) and "events" in parsed:
+                                events = parsed["events"]
+                        except json.JSONDecodeError:
+                            pass
+
+                        for ev in events:
+                            date_str = str(ev.get("date", "")).strip()
+                            if date_str:
+                                for fmt_in, fmt_out in [
+                                    (r'^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$', lambda m: f"{m.group(3)}-{m.group(2).zfill(2)}-{m.group(1).zfill(2)}"),
+                                    (r'^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})$', lambda m: f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"),
+                                    (r'^(\d{1,2})[/\-.](\d{1,2})$', lambda m: f"{current_year}-{m.group(2).zfill(2)}-{m.group(1).zfill(2)}"),
+                                ]:
+                                    m = _re.match(fmt_in, date_str)
+                                    if m:
+                                        ev["date"] = fmt_out(m)
+                                        break
+
+                            # Validate YYYY-MM-DD
+                            if not _re.match(r'^\d{4}-\d{2}-\d{2}$', str(ev.get("date", ""))):
+                                ev["date"] = ""
+
+                            # Ensure subject
+                            if not ev.get("subject") and ev.get("title"):
+                                ev["subject"] = ev["title"]
+
+            except Exception as parse_err:
+                print(f"[OCR] AI parsing error: {parse_err}")
 
         return {"events": events, "raw_text": raw_text[:5000]}
 
     finally:
-        # Clean up temp file
         try:
             os.unlink(tmp_path)
         except Exception:
@@ -1064,7 +1188,7 @@ from typing import List
 @app.get("/api/history", response_model=List[schemas.IaHistoryOut])
 def get_ia_history(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
     from sqlite_models import IaHistory
-    return db.query(IaHistory).filter(IaHistory.user_id == current_user.id).order_by(IaHistory.timestamp.desc()).limit(50).all()
+    return db.query(IaHistory).filter(IaHistory.user_id == current_user.id).order_by(IaHistory.timestamp.desc()).all()
 
 @app.post("/api/history", response_model=schemas.IaHistoryOut)
 def save_ia_history(history_in: schemas.IaHistoryCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):

@@ -22,6 +22,7 @@ import {
   type AvatarConfig,
 } from '../utils/avatarConfig';
 import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp, Upload, Loader, Eye, EyeOff, X, Check } from 'lucide-react';
+import { useIaTaskContext } from '../context/IaTaskContext';
 
 // SVG Icons for action cards
 const ResumeIcon = () => (
@@ -58,11 +59,31 @@ export default function RaisonnementPage() {
   const [remedialWrongTopics, setRemedialWrongTopics] = useState('');
 
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const { tasks, startStreamTask, cancelTask: cancelGlobalTask } = useIaTaskContext();
+  const [activeTaskIds, setActiveTaskIds] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const syncState = (tid: string | undefined, setContent: (c: string) => void, setStreaming: (s: boolean) => void) => {
+      if (tid && tasks[tid]) {
+        if (tasks[tid].content || tasks[tid].status === 'completed') setContent(tasks[tid].content);
+        setStreaming(tasks[tid].status === 'streaming');
+      }
+    };
+    syncState(activeTaskIds['resume'], setStreamContent, setIsStreaming);
+    syncState(activeTaskIds['qcm'], setRawQcmContent, setIsStreaming);
+    syncState(activeTaskIds['qr_question'], setQrQuestion, setIsStreamingQuestion);
+    syncState(activeTaskIds['qr_correct'], setQrCorrection, setIsStreamingCorrection);
+    syncState(activeTaskIds['qcm_remedial'], setRawRemedialContent, setIsStreaming);
+  }, [tasks, activeTaskIds]);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(getDefaultConfig());
 
   useEffect(() => {
-    loadHistory().then(setHistory);
+    const reload = () => loadHistory().then(setHistory);
+    reload();
     loadAvatarConfig().then(setAvatarConfig);
+    
+    window.addEventListener('ia-history-updated', reload);
+    return () => window.removeEventListener('ia-history-updated', reload);
   }, []);
   const [showAvatarCreator, setShowAvatarCreator] = useState(false);
 
@@ -86,14 +107,14 @@ export default function RaisonnementPage() {
   }, [history]);
 
   const cancelStream = useCallback(() => {
-    if (controllerRef.current) {
-      controllerRef.current.abort();
-      controllerRef.current = null;
-    }
+    Object.values(activeTaskIds).forEach(tid => {
+        if (tid) cancelGlobalTask(tid);
+    });
+    setActiveTaskIds({});
     setIsStreaming(false);
     setIsStreamingQuestion(false);
     setIsStreamingCorrection(false);
-  }, []);
+  }, [activeTaskIds, cancelGlobalTask]);
 
   const resetResults = useCallback(() => {
     cancelStream();
@@ -116,23 +137,9 @@ export default function RaisonnementPage() {
     setPendingAction(null);
     resetResults();
     setActiveMode('resume');
-    setIsStreaming(true);
-
-    controllerRef.current = fetchStream(
-      { mode: 'resume', text, subject, language: detectLanguage(text) },
-      (_token, fullText) => setStreamContent(fullText),
-      async (fullText) => {
-        setIsStreaming(false);
-        setStreamContent(fullText);
-        const newHistory = await saveToHistory({ mode: 'resume', text: text.substring(0, 200), subject, result: fullText });
-        setHistory(newHistory);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setStreamContent('❌ Erreur: ' + err.message);
-      }
-    );
-  }, [text, subject, resetResults]);
+    const tid = startStreamTask('resume', text, subject, detectLanguage(text));
+    setActiveTaskIds(prev => ({ ...prev, resume: tid }));
+  }, [text, subject, resetResults, startStreamTask]);
 
   const handleQcm = useCallback(() => {
     if (!text.trim()) return;
@@ -146,23 +153,9 @@ export default function RaisonnementPage() {
     setPendingAction(null);
     resetResults();
     setActiveMode('qcm');
-    setIsStreaming(true);
-
-    controllerRef.current = fetchStream(
-      { mode: 'qcm', text, subject, language: detectLanguage(text) },
-      (_token, fullText) => setRawQcmContent(fullText),
-      async (fullText) => {
-        setIsStreaming(false);
-        setRawQcmContent(fullText);
-        const newHistory = await saveToHistory({ mode: 'qcm', text: text.substring(0, 200), subject, result: fullText });
-        setHistory(newHistory);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setRawQcmContent('❌ Erreur: ' + err.message);
-      }
-    );
-  }, [text, subject, resetResults]);
+    const tid = startStreamTask('qcm', text, subject, detectLanguage(text));
+    setActiveTaskIds(prev => ({ ...prev, qcm: tid }));
+  }, [text, subject, resetResults, startStreamTask]);
 
   const handleQr = useCallback(() => {
     if (!text.trim()) return;
@@ -176,72 +169,23 @@ export default function RaisonnementPage() {
     setPendingAction(null);
     resetResults();
     setActiveMode('qr');
-    setIsStreamingQuestion(true);
-
-    controllerRef.current = fetchStream(
-      { mode: 'qr_question', text, subject, language: detectLanguage(text) },
-      (_token, fullText) => setQrQuestion(fullText),
-      (fullText) => {
-        setIsStreamingQuestion(false);
-        setQrQuestion(fullText);
-      },
-      (err) => {
-        setIsStreamingQuestion(false);
-        setQrQuestion('❌ Erreur: ' + err.message);
-      }
-    );
-  }, [text, subject, resetResults]);
+    const tid = startStreamTask('qr_question', text, subject, detectLanguage(text));
+    setActiveTaskIds(prev => ({ ...prev, qr_question: tid }));
+  }, [text, subject, resetResults, startStreamTask]);
 
   const handleQrAnswer = useCallback((userAnswer: string) => {
-    setIsStreamingCorrection(true);
-    controllerRef.current = fetchStream(
-      { mode: 'qr_correct', text, user_answer: userAnswer, question: qrQuestion, subject, language: detectLanguage(text) },
-      (_token, fullText) => setQrCorrection(fullText),
-      async (fullText) => {
-        setIsStreamingCorrection(false);
-        setQrCorrection(fullText);
-        const newHistory = await saveToHistory({
-          mode: 'qr',
-          text: text.substring(0, 200),
-          question: qrQuestion,
-          userAnswer,
-          correction: fullText,
-        });
-        setHistory(newHistory);
-      },
-      (err) => {
-        setIsStreamingCorrection(false);
-        setQrCorrection('❌ Erreur: ' + err.message);
-      }
-    );
-  }, [text, qrQuestion]);
+    const tid = startStreamTask('qr_correct', text, subject, detectLanguage(text), qrQuestion);
+    setActiveTaskIds(prev => ({ ...prev, qr_correct: tid }));
+  }, [text, subject, qrQuestion, startStreamTask]);
 
   const handleRemediaq = useCallback((wrongQuestions: any[], wrongIndexes: number[]) => {
     // Créer une description des sujets des questions incorrectes
     const topics = wrongQuestions.map(q => q.question).join(' | ');
     setRemedialWrongTopics(topics);
     setActiveMode('qcm_remedial');
-    setIsStreaming(true);
-
-    controllerRef.current = fetchStream(
-      { mode: 'qcm_remedial', text, wrongTopics: topics, language: detectLanguage(text) },
-      (_token, fullText) => setRawRemedialContent(fullText),
-      async (fullText) => {
-        setIsStreaming(false);
-        setRawRemedialContent(fullText);
-        const newHistory = await saveToHistory({
-          mode: 'qcm_remedial',
-          text: text.substring(0, 200),
-          result: fullText
-        });
-        setHistory(newHistory);
-      },
-      (err) => {
-        setIsStreaming(false);
-        setRawRemedialContent('❌ Erreur: ' + err.message);
-      }
-    );
-  }, [text]);
+    const tid = startStreamTask('qcm_remedial', text, subject || 'Remedial', detectLanguage(text), topics);
+    setActiveTaskIds(prev => ({ ...prev, qcm_remedial: tid }));
+  }, [text, subject, startStreamTask]);
 
   const handleHistorySelect = useCallback(async (item: HistoryItem) => {
     setText(item.text || '');
@@ -405,58 +349,97 @@ export default function RaisonnementPage() {
           overflowY: 'auto',
           padding: '0 16px 16px',
         }}>
-          <h3 style={{
-            fontSize: '0.75rem',
-            fontWeight: 'bold',
-            color: T.textMuted,
-            textTransform: 'uppercase',
-            letterSpacing: '0.1em',
-            marginBottom: 16,
-            paddingLeft: 8,
-          }}>Aujourd'hui</h3>
+          {(() => {
+            // Group history by date
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {history.slice(0, 5).map((item, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleHistorySelect(item)}
-                style={{
-                  width: '100%',
-                  textAlign: 'left',
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  fontSize: '0.875rem',
-                  color: T.textOnCard,
-                  background: 'transparent',
-                  border: `1px solid ${T.border}`,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}10`;
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
-                  (e.currentTarget as HTMLButtonElement).style.color = T.accent;
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-                  (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
-                  (e.currentTarget as HTMLButtonElement).style.color = T.textOnCard;
-                }}
-              >
-                <span style={{ color: T.accent, fontWeight: 'bold' }}>#{idx + 1}</span> {item.mode}...
-              </button>
-            ))}
-          </div>
+            const groups: { label: string; items: typeof history }[] = [];
+            const todayItems = history.filter(item => item.timestamp?.startsWith(todayStr));
+            const yesterdayItems = history.filter(item => item.timestamp?.startsWith(yesterdayStr));
+            const olderItems = history.filter(item => {
+              if (!item.timestamp) return true;
+              return !item.timestamp.startsWith(todayStr) && !item.timestamp.startsWith(yesterdayStr);
+            });
 
-          {history.length > 5 && (
+            if (todayItems.length > 0) groups.push({ label: "Aujourd'hui", items: todayItems });
+            if (yesterdayItems.length > 0) groups.push({ label: 'Hier', items: yesterdayItems });
+            if (olderItems.length > 0) groups.push({ label: 'Plus ancien', items: olderItems });
+
+            if (groups.length === 0) {
+              return (
+                <p style={{ fontSize: '0.8rem', color: T.textMuted, textAlign: 'center', padding: '20px 0' }}>
+                  Aucun historique
+                </p>
+              );
+            }
+
+            return groups.map((group, gi) => (
+              <div key={gi} style={{ marginBottom: 16 }}>
+                <h3 style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 'bold',
+                  color: T.textMuted,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                  marginBottom: 10,
+                  paddingLeft: 8,
+                }}>{group.label}</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {group.items.map((item, idx) => {
+                    const modeLabels: Record<string, string> = { resume: 'Résumé', qcm: 'QCM', qr: 'Q/R', qcm_remedial: 'Rattrapage' };
+                    const label = modeLabels[item.mode] || item.mode;
+                    const preview = item.subject || (item.text ? item.text.substring(0, 40) + '...' : '');
+
+                    return (
+                      <button
+                        key={item.id || idx}
+                        onClick={() => handleHistorySelect(item)}
+                        style={{
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          borderRadius: 8,
+                          fontSize: '0.8rem',
+                          color: T.textOnCard,
+                          background: 'transparent',
+                          border: `1px solid ${T.border}`,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s',
+                          overflow: 'hidden',
+                        }}
+                        onMouseEnter={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = `${T.accent}10`;
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = T.accent;
+                        }}
+                        onMouseLeave={(e) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                          (e.currentTarget as HTMLButtonElement).style.borderColor = T.border;
+                        }}
+                      >
+                        <div style={{ fontWeight: 700, fontSize: '0.78rem', marginBottom: 2 }}>{label}</div>
+                        {preview && (
+                          <div style={{ fontSize: '0.7rem', color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {preview}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ));
+          })()}
+
+          {history.length > 0 && (
             <button
               onClick={handleClearHistory}
               style={{
                 width: '100%',
-                marginTop: 24,
+                marginTop: 12,
                 padding: '8px 12px',
                 fontSize: '0.75rem',
                 color: T.textMuted,
@@ -466,7 +449,7 @@ export default function RaisonnementPage() {
                 cursor: 'pointer',
                 transition: 'all 0.2s',
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = T.accent; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
               onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = T.textMuted; }}
             >
               Effacer l'historique
@@ -629,7 +612,7 @@ export default function RaisonnementPage() {
                       backdropFilter: 'blur(32px)',
                     }}>
                       <h3 style={{ color: '#a855f7', fontWeight: 'bold', marginBottom: '8px' }}>
-                        🎯 Questions de rattrapage adaptées
+                        Questions de rattrapage adaptées
                       </h3>
                       <p style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
                         Ces questions vous aideront à mieux comprendre les sujets problématiques.
@@ -756,7 +739,7 @@ export default function RaisonnementPage() {
                       {/* Error message */}
                       {ocrError && (
                         <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 500 }}>
-                          ⚠️ {ocrError}
+                          Erreur: {ocrError}
                         </span>
                       )}
                     </div>
@@ -1108,7 +1091,7 @@ export default function RaisonnementPage() {
                   Texte extrait du document
                 </h3>
                 <p style={{ fontSize: '0.7rem', color: T.textMuted, margin: '4px 0 0' }}>
-                  📄 {ocrFilename} — Vérifiez et modifiez le texte avant de continuer
+                  {ocrFilename} — Vérifiez et modifiez le texte avant de continuer
                 </p>
               </div>
               <button onClick={() => setShowOcrReview(false)} style={{
@@ -1139,8 +1122,8 @@ export default function RaisonnementPage() {
                 }} />
                 <span style={{ fontSize: '0.75rem', color: T.textMuted, fontWeight: 600 }}>
                   {ocrCleanedText !== ocrRawText
-                    ? '✅ Texte corrigé par l\'IA — Vous pouvez le modifier'
-                    : '📝 Texte brut (IA non disponible) — Vous pouvez le modifier'
+                    ? 'Texte corrigé par l\'IA — Vous pouvez le modifier'
+                    : 'Texte brut (IA non disponible) — Vous pouvez le modifier'
                   }
                 </span>
               </div>

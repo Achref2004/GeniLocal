@@ -2,25 +2,28 @@
 //  PLANNING STORAGE — Data Model + LocalStorage CRUD
 // ═══════════════════════════════════════════════════════════
 
+import React, { ReactNode } from 'react';
+import { BookOpen, HelpCircle, Brain, Target, FileText, MessageSquare, GraduationCap, PenTool, AlertCircle, Sparkles } from 'lucide-react';
+
 // ─── Types ──────────────────────────────────────────────────
 
 export type NoteType = 'resume' | 'question' | 'quiz' | 'objectif' | 'devoir' | 'libre';
 export type EventCategory = 'etude' | 'revision' | 'examen' | 'loisir';
 
-export const NOTE_TYPE_CONFIG: Record<NoteType, { label: string; icon: string; color: string }> = {
-  resume:   { label: 'Résumé de cours', icon: '📖', color: '#3b82f6' },
-  question: { label: 'Questions',       icon: '❓', color: '#8b5cf6' },
-  quiz:     { label: 'Quiz / QCM',      icon: '🧠', color: '#10b981' },
-  objectif: { label: 'Objectif du jour', icon: '🎯', color: '#f59e0b' },
-  devoir:   { label: 'Devoir à faire',  icon: '📝', color: '#ef4444' },
-  libre:    { label: 'Note libre',       icon: '💬', color: '#64748b' },
+export const NOTE_TYPE_CONFIG: Record<NoteType, { label: string; icon: ReactNode; color: string }> = {
+  resume:   { label: 'Résumé de cours', icon: <BookOpen size={16} />, color: '#3b82f6' },
+  question: { label: 'Questions',       icon: <HelpCircle size={16} />, color: '#8b5cf6' },
+  quiz:     { label: 'Quiz / QCM',      icon: <Brain size={16} />, color: '#10b981' },
+  objectif: { label: 'Objectif du jour', icon: <Target size={16} />, color: '#f59e0b' },
+  devoir:   { label: 'Devoir à faire',  icon: <FileText size={16} />, color: '#ef4444' },
+  libre:    { label: 'Note libre',       icon: <MessageSquare size={16} />, color: '#64748b' },
 };
 
-export const CATEGORY_CONFIG: Record<EventCategory, { label: string; emoji: string; color: string }> = {
-  etude:    { label: 'Études',    emoji: '🔵', color: '#3b82f6' },
-  revision: { label: 'Révisions', emoji: '🟢', color: '#10b981' },
-  examen:   { label: 'Examens',   emoji: '🔴', color: '#ef4444' },
-  loisir:   { label: 'Loisirs',   emoji: '🟡', color: '#f59e0b' },
+export const CATEGORY_CONFIG: Record<EventCategory, { label: string; emoji: ReactNode; color: string }> = {
+  etude:    { label: 'Études',    emoji: <GraduationCap size={16} />, color: '#3b82f6' },
+  revision: { label: 'Révisions', emoji: <PenTool size={16} />, color: '#10b981' },
+  examen:   { label: 'Examens',   emoji: <AlertCircle size={16} />, color: '#ef4444' },
+  loisir:   { label: 'Loisirs',   emoji: <Sparkles size={16} />, color: '#f59e0b' },
 };
 
 export interface PlanningNote {
@@ -32,6 +35,7 @@ export interface PlanningNote {
   subject?: string;
   category: EventCategory;
   checked?: boolean; // for objectif/devoir
+  source?: 'manual' | 'ocr';
   createdAt: string;
 }
 
@@ -81,7 +85,8 @@ export async function saveNote(note: Omit<PlanningNote, 'id' | 'createdAt'>): Pr
       const newNote = {
         ...note,
         id: `note_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        item_type: 'note'
+        item_type: 'note',
+        source: 'manual',
       };
       await fetch(`${API_BASE}/planning/notes`, {
         method: 'POST',

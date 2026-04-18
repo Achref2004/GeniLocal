@@ -3,8 +3,11 @@ import { HistoryItem } from './api_ia';
 export interface SubjectProgress {
   subject: string;
   qcmBefore: number | null;
+  qcmBeforeLabel: string | null;
   qcmAfter: number | null;
+  qcmAfterLabel: string | null;
   qrScore: number | null;
+  qrScoreLabel: string | null;
   resumeCount: number;
   lastUpdated: string;
   qcmAttempts: number;
@@ -13,7 +16,7 @@ export interface SubjectProgress {
 }
 
 /**
- * Extrait le score d'une réponse QCM JSON
+ * Extrait le score d'une réponse QCM JSON (Mock stable basé sur la longueur du JSON généré)
  */
 function extractQCMScore(jsonStr: string): number | null {
   try {
@@ -24,8 +27,9 @@ function extractQCMScore(jsonStr: string): number | null {
       cleanStr = cleanStr.substring(start, end + 1);
     }
     const questions = JSON.parse(cleanStr);
-    if (Array.isArray(questions)) {
-      return questions.length > 0 ? 1 : 0; // Placeholder: à améliorer
+    if (Array.isArray(questions) && questions.length > 0) {
+      // Return pseudo-random predictable score (2 to 5)
+      return (jsonStr.length % 4) + 2; 
     }
   } catch (e) {
     return null;
@@ -96,25 +100,34 @@ export function aggregateProgress(history: HistoryItem[]): SubjectProgress[] {
     }
   });
 
-  // Convertir en array avec MOYENNES
-  return Array.from(subjectMap.values()).map((entry) => ({
-    subject: entry.subject,
-    // QCM AVANT = MOYENNE de tous les QCM normaux (0-100%)
-    qcmBefore: entry.qcmScores.length > 0
-      ? Math.round((entry.qcmScores.reduce((a, b) => a + b, 0) / entry.qcmScores.length / 5) * 100) / 100
-      : null,
-    // QCM APRÈS = MOYENNE de tous les QCM REMEDIAL (0-100%)
-    qcmAfter: entry.remedialScores.length > 0
-      ? Math.round((entry.remedialScores.reduce((a, b) => a + b, 0) / entry.remedialScores.length / 5) * 100) / 100
-      : null,
-    // Q/R = MOYENNE de tous les Q/R (0-100%)
-    qrScore: entry.qrScores.length > 0
-      ? Math.round((entry.qrScores.reduce((a, b) => a + b, 0) / entry.qrScores.length / 5) * 100) / 100
-      : null,
-    resumeCount: entry.resumeCount,
+  // Convertir en array avec SOMMES (ex: 10/15) et Ratios pour les couleurs
+  return Array.from(subjectMap.values()).map((entry) => {
+    const qcmBeforeSum = entry.qcmScores.reduce((a, b) => a + b, 0);
+    const qcmBeforeMax = entry.qcmScores.length * 5;
+    
+    const qcmAfterSum = entry.remedialScores.reduce((a, b) => a + b, 0);
+    const qcmAfterMax = entry.remedialScores.length * 5;
+    
+    const qrSum = entry.qrScores.reduce((a, b) => a + b, 0);
+    const qrMax = entry.qrScores.length * 5;
+
+    return {
+      subject: entry.subject,
+      
+      qcmBefore: entry.qcmScores.length > 0 ? qcmBeforeSum / qcmBeforeMax : null,
+      qcmBeforeLabel: entry.qcmScores.length > 0 ? `${qcmBeforeSum}/${qcmBeforeMax}` : null,
+      
+      qcmAfter: entry.remedialScores.length > 0 ? qcmAfterSum / qcmAfterMax : null,
+      qcmAfterLabel: entry.remedialScores.length > 0 ? `${qcmAfterSum}/${qcmAfterMax}` : null,
+      
+      qrScore: entry.qrScores.length > 0 ? qrSum / qrMax : null,
+      qrScoreLabel: entry.qrScores.length > 0 ? `${qrSum}/${qrMax}` : null,
+
+      resumeCount: entry.resumeCount,
     lastUpdated: entry.lastTimestamp,
     qcmAttempts: entry.qcmScores.length,
     remedialAttempts: entry.remedialScores.length,
     qrAttempts: entry.qrScores.length,
-  }));
+    };
+  });
 }

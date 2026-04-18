@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTheme } from '../../reutilisable/Themecontext';
 import './qcm-loading.css';
 import MemoryGame from './MemoryGame';
@@ -23,20 +23,60 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
 
   const questions = useMemo((): Question[] | null => {
     if (!rawContent) return null;
+    let text = rawContent.trim();
+    
+    // Attempt 1: Standard JSON parse
     try {
-      let jsonStr = rawContent.trim();
-      const start = jsonStr.indexOf('[');
-      const end = jsonStr.lastIndexOf(']');
+      const start = text.indexOf('[');
+      const end = text.lastIndexOf(']');
       if (start !== -1 && end !== -1) {
-        jsonStr = jsonStr.substring(start, end + 1);
+        const arrayStr = text.substring(start, end + 1);
+        const parsed = JSON.parse(arrayStr);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
       }
-      const parsed = JSON.parse(jsonStr);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed.slice(0, 5);
+    } catch (e) {}
+
+    // Attempt 2: Fix common trailing comma errors
+    try {
+      const start = text.indexOf('[');
+      const end = text.lastIndexOf(']');
+      if (start !== -1 && end !== -1) {
+        let arrayStr = text.substring(start, end + 1);
+        arrayStr = arrayStr.replace(/,\s*([\]}])/g, '$1');
+        const parsed = JSON.parse(arrayStr);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
       }
-    } catch (e) {
-      console.error('Failed to parse QCM JSON:', e, 'rawContent:', rawContent);
-    }
+    } catch (e) {}
+
+    // Attempt 3: Aggressive JS Object extraction using Regex
+    try {
+      const fallbackQuestions: Question[] = [];
+      const blocks = text.match(/\{[^{}]+\}/g);
+      
+      if (blocks) {
+        for (const block of blocks) {
+          try {
+            // Evaluates the string as a JS object block. High tolerance for AI JSON errors (trailing commas, single quotes, unquoted keys).
+            // eslint-disable-next-line no-new-func
+            const q = new Function(`return ${block}`)();
+            
+            if (q && (q.question || q.Q || q.q) && (q.choices || q.options || q.reponses)) {
+              const qs = String(q.question || q.Q || q.q);
+              const ch = q.choices || q.options || q.reponses;
+              if (Array.isArray(ch) && ch.length >= 2) {
+                fallbackQuestions.push({
+                  question: qs,
+                  choices: ch.map(c => String(c)),
+                  correct: typeof q.correct === 'number' ? q.correct : 0
+                });
+              }
+            }
+          } catch(e) {}
+        }
+      }
+      if (fallbackQuestions.length > 0) return fallbackQuestions.slice(0, 5);
+    } catch(e) {}
+
     return null;
   }, [rawContent]);
 
@@ -65,45 +105,14 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
   }, [answers, questions]);
 
   // Show remedial offer when quiz is complete and score < 5
-  useMemo(() => {
+  useEffect(() => {
     if (showScore && score < 5 && wrongAnswers.questions.length > 0 && !showRemedialOffer) {
       setShowRemedialOffer(true);
     }
   }, [showScore, score, wrongAnswers.questions.length, showRemedialOffer]);
 
-  if (isStreaming || !questions) {
-    if (isStreaming) {
-      return <MemoryGame isLoading={isStreaming} />;
-    }
-    // If not streaming but no questions, show loading state
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '500px', gap: '20px', padding: '40px', color: dark ? '#e2e8f0' : '#0f172a' }}>
-        <div style={{
-          fontSize: '1rem',
-          color: dark ? '#e2e8f0' : '#0f172a',
-          textAlign: 'center',
-        }}>
-          <p style={{ marginBottom: '12px' }}>⏳ Traitement des questions...</p>
-          <p style={{ fontSize: '0.875rem', color: dark ? '#94a3b8' : '#475569' }}>Veuillez patienter...</p>
-        </div>
-        {/* Minimal progress bar */}
-        <div style={{
-          width: '100%',
-          maxWidth: '300px',
-          height: '3px',
-          background: dark ? 'rgba(255,255,255,0.12)' : 'rgba(15,23,42,0.12)',
-          borderRadius: '2px',
-          overflow: 'hidden',
-        }}>
-          <div style={{
-            height: '100%',
-            background: T.accent,
-            animation: 'pulse 1.5s ease-in-out infinite',
-            width: '50%',
-          }} />
-        </div>
-      </div>
-    );
+  if (isStreaming) {
+    return <MemoryGame isLoading={isStreaming} />;
   }
 
   return (
@@ -295,14 +304,18 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
         ) : (
           !isStreaming && (
             <div style={{
-              textAlign: 'center',
-              padding: '40px',
+              textAlign: 'left',
+              padding: '24px',
               color: dark ? '#e2e8f0' : '#0f172a',
               background: dark ? 'rgba(15, 23, 42, 0.8)' : '#f8fafc',
               border: `1px solid ${dark ? 'rgba(71, 85, 105, 0.35)' : 'rgba(148, 163, 184, 0.3)'}`,
               borderRadius: '12px',
             }}>
-              <p>Impossible de charger les questions. Veuillez réessayer.</p>
+              <h3 style={{ color: '#ef4444', marginBottom: '12px', fontWeight: 'bold' }}>⚠️ QCM non interactif</h3>
+              <p style={{ marginBottom: '16px', color: dark ? '#cbd5e1' : '#475569', fontSize: '0.875rem' }}>L'IA a généré des questions, mais le format est invalide pour être interactif. Voici la réponse générée :</p>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: '0.85rem', background: dark ? 'rgba(0,0,0,0.3)' : '#e2e8f0', padding: '16px', borderRadius: '8px', border: `1px solid ${dark ? '#334155' : '#cbd5e1'}` }}>
+                {rawContent || "Aucune réponse générée."}
+              </pre>
             </div>
           )
         )}

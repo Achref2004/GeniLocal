@@ -31,7 +31,7 @@ function generatePrompt(mode: string, text: string, subject?: string, user_answe
   const lang = language || detectLanguage(text);
 
   // Textes multilingues
-  const labels = {
+  const labels: Record<string, { teacher: string; french_only: string; summarize: string; answer: string }> = {
     fr: {
       teacher: 'Tu es un professeur expert',
       french_only: 'Réponds UNIQUEMENT en FRANÇAIS',
@@ -588,6 +588,7 @@ export async function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>
         correction: entry.correction,
       })
     });
+    window.dispatchEvent(new Event('ia-history-updated'));
   } catch (err) {
     console.error('❌ Error saving history to database:', err);
   }

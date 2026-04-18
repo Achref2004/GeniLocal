@@ -134,9 +134,11 @@ class ChatMessageOut(ChatMessageCreate):
 class PlanningItemCreate(BaseModel):
     id: str
     date: str
+    type: str = "libre"
     item_type: str
     title: str
     content: Optional[str] = None
+    subject: Optional[str] = None
     category: str
     source: str
     checked: bool = False

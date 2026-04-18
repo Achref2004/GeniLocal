@@ -3,6 +3,7 @@ import axios from 'axios';
 import {
     User, Mail, Phone, Calendar, School, Target,
     GraduationCap, Camera, Star, Save, Sparkles, CheckCircle2, Globe,
+    Book, Bot, Timer, FileText, Moon, Flame, Trophy, PenTool, Lightbulb, Gem, Crown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme, STARS, BIRDS } from '../reutilisable/Themecontext';
@@ -24,6 +25,7 @@ const Profile: React.FC = () => {
         fullname: '', email: '', phone: '',
         birthdate: '', institution: '', region: '', level: 'Licence 3', objective: '',
     });
+    const [showAllBadges, setShowAllBadges] = useState(false);
 
     useEffect(() => {
         if (!token) { navigate('/login'); return; }
@@ -273,8 +275,8 @@ const Profile: React.FC = () => {
                                     {formData.level || 'Niveau non défini'}
                                 </span>
                                 {formData.institution && (
-                                    <p style={{ color: T.textOnCardMuted, fontSize: 13, marginTop: 10, textAlign: 'center', fontWeight: 500 }}>
-                                        🏛️ {formData.institution}
+                                    <p style={{ color: T.textOnCardMuted, fontSize: 13, marginTop: 10, textAlign: 'center', fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                                        <School size={16} /> {formData.institution}
                                     </p>
                                 )}
                             </div>
@@ -286,70 +288,194 @@ const Profile: React.FC = () => {
                                 boxShadow: T.cardShadow,
                                 animation: 'fadeSlideUp .5s .2s ease both', opacity: 0, animationFillMode: 'forwards',
                             }}>
-                                <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: T.textOnCardMuted, fontWeight: 700, marginBottom: 20 }}>
-                                    🏅 Badges obtenus
+                                <p style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.12em', color: T.textOnCardMuted, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <Trophy size={14} color={T.accent} /> Badges obtenus
                                 </p>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 16, marginBottom: 24 }}>
                                     <div>
                                         <h3 style={{ margin: 0, fontSize: 30, fontWeight: 800, color: T.textOnCard }}>{badgeList.length}</h3>
                                         <p style={{ margin: '6px 0 0', color: T.textOnCardMuted, fontSize: 14 }}>badge{badgeList.length > 1 ? 's' : ''} débloqué{badgeList.length > 1 ? 's' : ''}</p>
                                     </div>
-                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 54, height: 54, borderRadius: 18, background: T.accent, color: '#fff', fontSize: 24, fontWeight: 800, boxShadow: `0 12px 30px ${T.accent}40` }}>
-                                        ✨
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 54, height: 54, borderRadius: 18, background: T.accent, color: '#fff', boxShadow: `0 12px 30px ${T.accent}40` }}>
+                                        <Sparkles size={26} />
                                     </div>
                                 </div>
 
                                 <div style={{ display: 'grid', gap: 12 }}>
-                                    {[
+                                    {(() => {
+                                        const badgesData = [
                                         {
                                             title: 'Premier utilisation',
                                             description: 'Débloqué dès votre première action sur la plateforme.',
                                             unlocked: badgeList.includes('Premier utilisation'),
+                                            icon: <Star size={20} />, color: '#f59e0b',
                                         },
                                         {
                                             title: '+5 matières ajoutées',
-                                            description: 'Ajoutez cinq matières différentes pour débloquer ce badge.',
+                                            description: 'Ajoutez cinq matières différentes.',
                                             unlocked: badgeList.includes('+5 matières ajoutées'),
+                                            icon: <Book size={20} />, color: '#3b82f6',
                                         },
-                                    ].map(item => (
+                                        {
+                                            title: 'Explorateur IA',
+                                            description: 'Utilisez l\'IA pour la première fois (QCM, Résumé ou Q/R).',
+                                            unlocked: badgeList.includes('Explorateur IA'),
+                                            icon: <Bot size={20} />, color: '#8b5cf6',
+                                        },
+                                        {
+                                            title: 'Marathonien',
+                                            description: 'Cumulez plus d\'1 heure d\'étude sur la plateforme.',
+                                            unlocked: badgeList.includes('Marathonien'),
+                                            icon: <Timer size={20} />, color: '#ef4444',
+                                        },
+                                        {
+                                            title: 'QCM Parfait',
+                                            description: 'Obtenez un score de 100% sur un QCM.',
+                                            unlocked: badgeList.includes('QCM Parfait'),
+                                            icon: <Target size={20} />, color: '#10b981',
+                                        },
+                                        {
+                                            title: 'Importateur OCR',
+                                            description: 'Importez votre premier emploi du temps via OCR.',
+                                            unlocked: badgeList.includes('Importateur OCR'),
+                                            icon: <FileText size={20} />, color: '#06b6d4',
+                                        },
+                                        {
+                                            title: 'Organisateur',
+                                            description: 'Ajoutez 10 activités dans votre planning.',
+                                            unlocked: badgeList.includes('Organisateur'),
+                                            icon: <Calendar size={20} />, color: '#f97316',
+                                        },
+                                        {
+                                            title: 'Noctambule',
+                                            description: 'Étudiez après 22h (mode sombre recommandé !).',
+                                            unlocked: badgeList.includes('Noctambule'),
+                                            icon: <Moon size={20} />, color: '#6366f1',
+                                        },
+                                        {
+                                            title: 'Polyglotte',
+                                            description: 'Utilisez l\'IA en au moins 2 langues différentes.',
+                                            unlocked: badgeList.includes('Polyglotte'),
+                                            icon: <Globe size={20} />, color: '#14b8a6',
+                                        },
+                                        {
+                                            title: 'Série de 7 jours',
+                                            description: 'Connectez-vous 7 jours consécutifs.',
+                                            unlocked: badgeList.includes('Série de 7 jours'),
+                                            icon: <Flame size={20} />, color: '#dc2626',
+                                        },
+                                        {
+                                            title: 'Maître QCM',
+                                            description: 'Complétez 20 QCM au total.',
+                                            unlocked: badgeList.includes('Maître QCM'),
+                                            icon: <Trophy size={20} />, color: '#eab308',
+                                        },
+                                        {
+                                            title: 'Résumeur Expert',
+                                            description: 'Générez 10 résumés avec l\'IA.',
+                                            unlocked: badgeList.includes('Résumeur Expert'),
+                                            icon: <PenTool size={20} />, color: '#a855f7',
+                                        },
+                                        {
+                                            title: 'Curieux',
+                                            description: 'Posez 15 questions à l\'IA.',
+                                            unlocked: badgeList.includes('Curieux'),
+                                            icon: <Lightbulb size={20} />, color: '#0ea5e9',
+                                        },
+                                        {
+                                            title: 'Perfectionniste',
+                                            description: 'Score moyen QCM supérieur à 80%.',
+                                            unlocked: badgeList.includes('Perfectionniste'),
+                                            icon: <Gem size={20} />, color: '#ec4899',
+                                        },
+                                        {
+                                            title: 'Champion GeniLocal',
+                                            description: 'Débloquez 10 badges pour devenir Champion !',
+                                            unlocked: badgeList.filter(b => [
+                                                'Premier utilisation', '+5 matières ajoutées', 'Explorateur IA',
+                                                'Marathonien', 'QCM Parfait', 'Importateur OCR', 'Organisateur',
+                                                'Noctambule', 'Polyglotte', 'Série de 7 jours', 'Maître QCM',
+                                                'Résumeur Expert', 'Curieux', 'Perfectionniste'
+                                            ].includes(b)).length >= 10,
+                                            icon: <Crown size={20} />, color: '#d97706',
+                                        },
+                                        ];
+                                        const unlockedBadges = badgesData.filter(b => b.unlocked);
+                                        const displayedBadges = showAllBadges ? badgesData : unlockedBadges.slice(0, 3);
+                                        const showToggleButton = badgesData.length > 3 || unlockedBadges.length > 3;
+                                        return (
+                                            <>
+                                                {displayedBadges.map(item => (
                                         <div key={item.title} style={{
                                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                            padding: '16px 18px', background: dark ? '#08101a' : '#f8fafc', borderRadius: 18,
-                                            border: `1px solid ${item.unlocked ? T.accent : T.cardBorder}`,
+                                            padding: '14px 16px', 
+                                            background: item.unlocked 
+                                                ? `${item.color}10` 
+                                                : (dark ? '#08101a' : '#f8fafc'), 
+                                            borderRadius: 18,
+                                            border: `1px solid ${item.unlocked ? `${item.color}40` : T.cardBorder}`,
+                                            transition: 'all 0.3s',
+                                            opacity: item.unlocked ? 1 : 0.6,
                                         }}>
-                                            <div>
-                                                <p style={{ margin: 0, fontWeight: 700, color: T.textOnCard }}>{item.title}</p>
-                                                <p style={{ margin: '6px 0 0', color: T.textOnCardMuted, fontSize: 13 }}>{item.description}</p>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                                <div style={{
+                                                    width: 40, height: 40, borderRadius: 12,
+                                                    background: item.unlocked 
+                                                        ? `linear-gradient(135deg, ${item.color}, ${item.color}aa)` 
+                                                        : (dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'),
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    fontSize: 18,
+                                                    filter: item.unlocked ? 'none' : 'grayscale(1)',
+                                                    boxShadow: item.unlocked ? `0 4px 12px ${item.color}30` : 'none',
+                                                }}>
+                                                    {item.icon}
+                                                </div>
+                                                <div>
+                                                    <p style={{ margin: 0, fontWeight: 700, fontSize: 13, color: item.unlocked ? item.color : T.textOnCard }}>{item.title}</p>
+                                                    <p style={{ margin: '3px 0 0', color: T.textOnCardMuted, fontSize: 11 }}>{item.description}</p>
+                                                </div>
                                             </div>
                                             <span style={{
-                                                minWidth: 84,
-                                                padding: '8px 10px',
+                                                minWidth: 76,
+                                                padding: '6px 10px',
                                                 borderRadius: 999,
                                                 textAlign: 'center',
-                                                background: item.unlocked ? T.accent : T.card,
-                                                color: item.unlocked ? '#0b1720' : T.textOnCardMuted,
+                                                background: item.unlocked ? item.color : (dark ? 'rgba(255,255,255,0.05)' : T.card),
+                                                color: item.unlocked ? '#fff' : T.textOnCardMuted,
                                                 fontWeight: 700,
-                                                fontSize: 12,
+                                                fontSize: 11,
                                             }}>
-                                                {item.unlocked ? 'Débloqué' : 'À débloquer'}
+                                                {item.unlocked ? '✓ Débloqué' : '🔒 Verrouillé'}
                                             </span>
                                         </div>
-                                    ))}
-                                </div>
-
-                                <div style={{ marginTop: 24, display: 'grid', gap: 10 }}>
-                                    {badgeList.length > 0 ? badgeList.map((badge, index) => (
-                                        <div key={`${badge}-${index}`} style={{
-                                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                            padding: '12px 14px', background: T.statBg, borderRadius: 14,
-                                            border: `1px solid ${T.cardBorder}`,
-                                        }}>
-                                            <span style={{ color: T.textOnCardMuted }}>{badge}</span>
-                                            <span style={{ color: T.accent, fontWeight: 700 }}>✓</span>
-                                        </div>
-                                    )) : (
-                                        <p style={{ margin: 0, color: T.textOnCardMuted, fontSize: 14 }}>Aucun badge pour le moment. Utilisez l'IA, ajoutez plus de matières et débloquez vos premiers trophées !</p>
-                                    )}
+                                                ))}
+                                                {showToggleButton && (
+                                                    <button
+                                                        onClick={() => setShowAllBadges(!showAllBadges)}
+                                                        style={{
+                                                            width: '100%',
+                                                            padding: '12px 16px',
+                                                            borderRadius: 14,
+                                                            border: `1px solid ${T.cardBorder}`,
+                                                            background: dark ? `${T.accent}10` : `${T.accent}0a`,
+                                                            color: T.accent,
+                                                            fontSize: 14,
+                                                            fontWeight: 600,
+                                                            cursor: 'pointer',
+                                                            marginTop: 8,
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            gap: 8,
+                                                            transition: 'all 0.2s ease',
+                                                        }}
+                                                    >
+                                                        {showAllBadges ? 'Voir moins' : `Voir tous les badges (${badgesData.length})`}
+                                                    </button>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>

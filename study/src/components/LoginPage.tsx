@@ -7,6 +7,8 @@ import { Label } from './ui/label';
 import { BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api';
+import logoGeniLocal from '../assets/logoo_genilocal.png';
+import login_image from '../assets/login_image.png';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -99,8 +101,8 @@ export function LoginPage() {
         >
           <div className="absolute inset-6 border border-[#d1cab5] rounded-sm pointer-events-none"></div>
           <div className="relative z-10 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-6 bg-[#eae4d3] border border-[#cdaa6a] shadow-inner">
-              <BookOpen className="w-8 h-8 text-[#8a9a8f]" />
+            <div className="inline-flex items-center justify-center w-24 h-24 rounded-full mb-6 bg-[#eae4d3] border border-[#cdaa6a] shadow-inner overflow-hidden">
+              <img src={logoGeniLocal} alt="Logo GeniLocal" className="w-[72px] h-[72px] object-contain" />
             </div>
             <h2 className="font-serif text-3xl mb-2 text-[#3a3f3b]">Préface</h2>
             <div className="h-px w-16 mx-auto bg-[#cdaa6a] mb-8"></div>
@@ -109,14 +111,12 @@ export function LoginPage() {
             </p>
             <div>
               <img 
-                  src="/assets/logo_smartcarthage.png" 
-                  alt="Logo SmartCarthage"
-                  className="w-full h-full object-cover"
-                  style={{ filter: 'sepia(0.08) contrast(1) brightness(1.03)' }}
-              />
+                  src={login_image} 
+                  alt="Logo GeniLocal"
+                  className="w-full h-full object-cover"              />
             </div>
             <p className="text-sm text-[#5e6660] leading-relaxed px-4">
-              Bienvenue dans <span style={{ color: '#0e7d83' }}>Smart</span><span style={{ color: '#95393e' }}>Carthage</span>. Une plateforme conçue par <span className="font-serif font-semibold text-[#3a3f3b]">Achref Jnayeh</span> pour redéfinir l'apprentissage.
+              Bienvenue dans <span style={{ color: '#0e7d83' }}>Geni</span><span style={{ color: '#95393e' }}>Local</span>. Une plateforme conçue par <span className="font-serif font-semibold text-[#3a3f3b]">Achref Jnayeh</span> pour redéfinir l'apprentissage.
             </p>
           </div>
         </div>
