@@ -68,10 +68,10 @@ class IaCache(Base):
     )
 
     @staticmethod
-    def compute_hash(text: str, mode: str, subject: str = "", language: str = "fr") -> str:
+    def compute_hash(text: str, mode: str, subject: str = "", language: str = "fr", extra_data: str = "") -> str:
         """Generate a deterministic hash for cache lookup."""
         lang = (language or 'fr').strip().lower()
-        raw = f"{mode}:{subject}:{lang}:{text}".strip().lower()
+        raw = f"{mode}:{subject}:{lang}:{text}:{extra_data}".strip().lower()
         return hashlib.md5(raw.encode('utf-8')).hexdigest()
 
 

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useTheme } from '../../reutilisable/Themecontext';
 import './qcm-loading.css';
 import MemoryGame from './MemoryGame';
@@ -13,71 +13,176 @@ interface QcmViewProps {
   rawContent: string;
   isStreaming: boolean;
   onRemedialClick?: (wrongQuestions: Question[], wrongIndexes: number[]) => void;
+  /** Nombre max de questions affichées (5 pour QCM principal, 3 pour remédiation). */
+  maxQuestions?: number;
 }
 
-export default function QcmView({ rawContent, isStreaming, onRemedialClick }: QcmViewProps) {
+function stripCodeFences(s: string): string {
+  let t = s.trim();
+  if (!t.startsWith('```')) return t;
+  t = t.replace(/^```(?:json)?\s*/i, '');
+  const fence = t.lastIndexOf('```');
+  if (fence !== -1) t = t.slice(0, fence).trim();
+  return t;
+}
+
+function normalizeCorrect(raw: unknown, numChoices: number): number {
+  let c = 0;
+  if (typeof raw === 'string') {
+    const n = parseInt(raw.trim(), 10);
+    if (Number.isFinite(n)) c = n;
+  } else if (typeof raw === 'number' && !Number.isNaN(raw)) {
+    c = Math.floor(raw);
+  }
+  if (numChoices <= 0) return 0;
+  return Math.max(0, Math.min(numChoices - 1, c));
+}
+
+function validateQuestion(raw: unknown): Question | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const qText = o.question ?? o.Q ?? o.q;
+  const choicesRaw = o.choices ?? o.options ?? o.reponses;
+  if (typeof qText !== 'string' || !Array.isArray(choicesRaw) || choicesRaw.length < 2) return null;
+  const choices = choicesRaw.map((c) => String(c));
+  const correct = normalizeCorrect(o.correct, choices.length);
+  return { question: qText, choices, correct };
+}
+
+function extractArrayCandidate(parsed: unknown): unknown[] | null {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== 'object') return null;
+  const o = parsed as Record<string, unknown>;
+  for (const k of ['questions', 'qcm', 'items', 'data', 'quiz', 'responses']) {
+    if (Array.isArray(o[k])) return o[k] as unknown[];
+  }
+  for (const key of Object.keys(o)) {
+    const ks = key.trim();
+    if (ks.startsWith('[')) {
+      try {
+        const inner = JSON.parse(ks);
+        if (Array.isArray(inner)) return inner;
+      } catch {
+        try {
+          const inner = JSON.parse(ks.replace(/,\s*([\]}])/g, '$1'));
+          if (Array.isArray(inner)) return inner;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  for (const val of Object.values(o)) {
+    if (typeof val === 'string') {
+      const st = val.trim();
+      if (st.startsWith('[')) {
+        try {
+          const inner = JSON.parse(st);
+          if (Array.isArray(inner)) return inner;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+  }
+  return null;
+}
+
+function tryParseBracketArrays(text: string): unknown[] | null {
+  const start = text.indexOf('[');
+  if (start === -1) return null;
+  let pos = text.length;
+  while ((pos = text.lastIndexOf(']', pos - 1)) > start) {
+    const slice = text.slice(start, pos + 1);
+    const cleaned = slice.replace(/,\s*([\]}])/g, '$1');
+    try {
+      const arr = JSON.parse(cleaned);
+      if (Array.isArray(arr) && arr.length > 0) return arr;
+    } catch {
+      /* try next ] */
+    }
+  }
+  return null;
+}
+
+function parseQuestionsFromRaw(raw: string, maxQuestions: number): Question[] | null {
+  if (!raw?.trim()) return null;
+  let text = stripCodeFences(raw.trim());
+
+  const tryCoerce = (arr: unknown[] | null): Question[] | null => {
+    if (!arr) return null;
+    const out: Question[] = [];
+    for (const item of arr) {
+      const q = validateQuestion(item);
+      if (q) out.push(q);
+    }
+    return out.length > 0 ? out.slice(0, maxQuestions) : null;
+  };
+
+  const attempts: unknown[] = [];
+  try {
+    attempts.push(JSON.parse(text));
+  } catch {
+    /* ignore */
+  }
+  if (attempts[0] !== undefined && typeof attempts[0] === 'string') {
+    try {
+      attempts.push(JSON.parse(attempts[0] as string));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  for (const parsed of attempts) {
+    if (parsed === undefined || parsed === null) continue;
+    const arr = extractArrayCandidate(parsed);
+    const coerced = tryCoerce(arr);
+    if (coerced) return coerced;
+  }
+
+  try {
+    const arr = tryParseBracketArrays(text);
+    const coerced = tryCoerce(arr);
+    if (coerced) return coerced;
+  } catch {
+    /* ignore */
+  }
+
+  const fallbackQuestions: Question[] = [];
+  const blocks = text.match(/\{[^{}]+\}/g);
+  if (blocks) {
+    for (const block of blocks) {
+      try {
+        // eslint-disable-next-line no-new-func
+        const q = new Function(`return ${block}`)();
+        const v = validateQuestion(q);
+        if (v) fallbackQuestions.push(v);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  if (fallbackQuestions.length > 0) return fallbackQuestions.slice(0, maxQuestions);
+
+  return null;
+}
+
+export default function QcmView({ rawContent, isStreaming, onRemedialClick, maxQuestions = 5 }: QcmViewProps) {
   const { dark, T } = useTheme();
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [showScore, setShowScore] = useState(false);
   const [showRemedialOffer, setShowRemedialOffer] = useState(false);
 
   const questions = useMemo((): Question[] | null => {
-    if (!rawContent) return null;
-    let text = rawContent.trim();
-    
-    // Attempt 1: Standard JSON parse
-    try {
-      const start = text.indexOf('[');
-      const end = text.lastIndexOf(']');
-      if (start !== -1 && end !== -1) {
-        const arrayStr = text.substring(start, end + 1);
-        const parsed = JSON.parse(arrayStr);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
-      }
-    } catch (e) {}
+    return parseQuestionsFromRaw(rawContent, maxQuestions);
+  }, [rawContent, maxQuestions]);
 
-    // Attempt 2: Fix common trailing comma errors
-    try {
-      const start = text.indexOf('[');
-      const end = text.lastIndexOf(']');
-      if (start !== -1 && end !== -1) {
-        let arrayStr = text.substring(start, end + 1);
-        arrayStr = arrayStr.replace(/,\s*([\]}])/g, '$1');
-        const parsed = JSON.parse(arrayStr);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed.slice(0, 5);
-      }
-    } catch (e) {}
+  const totalQuestions = questions?.length ?? 0;
 
-    // Attempt 3: Aggressive JS Object extraction using Regex
-    try {
-      const fallbackQuestions: Question[] = [];
-      const blocks = text.match(/\{[^{}]+\}/g);
-      
-      if (blocks) {
-        for (const block of blocks) {
-          try {
-            // Evaluates the string as a JS object block. High tolerance for AI JSON errors (trailing commas, single quotes, unquoted keys).
-            // eslint-disable-next-line no-new-func
-            const q = new Function(`return ${block}`)();
-            
-            if (q && (q.question || q.Q || q.q) && (q.choices || q.options || q.reponses)) {
-              const qs = String(q.question || q.Q || q.q);
-              const ch = q.choices || q.options || q.reponses;
-              if (Array.isArray(ch) && ch.length >= 2) {
-                fallbackQuestions.push({
-                  question: qs,
-                  choices: ch.map(c => String(c)),
-                  correct: typeof q.correct === 'number' ? q.correct : 0
-                });
-              }
-            }
-          } catch(e) {}
-        }
-      }
-      if (fallbackQuestions.length > 0) return fallbackQuestions.slice(0, 5);
-    } catch(e) {}
-
-    return null;
+  useEffect(() => {
+    setAnswers({});
+    setShowScore(false);
+    setShowRemedialOffer(false);
   }, [rawContent]);
 
   const handleAnswer = (qIndex: number, choiceIndex: number) => {
@@ -104,12 +209,17 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
     return { questions: wrongQuestions, indexes: wrongIndexes };
   }, [answers, questions]);
 
-  // Show remedial offer when quiz is complete and score < 5
   useEffect(() => {
-    if (showScore && score < 5 && wrongAnswers.questions.length > 0 && !showRemedialOffer) {
+    if (
+      showScore &&
+      totalQuestions > 0 &&
+      score < totalQuestions &&
+      wrongAnswers.questions.length > 0 &&
+      !showRemedialOffer
+    ) {
       setShowRemedialOffer(true);
     }
-  }, [showScore, score, wrongAnswers.questions.length, showRemedialOffer]);
+  }, [showScore, score, wrongAnswers.questions.length, showRemedialOffer, totalQuestions]);
 
   if (isStreaming) {
     return <MemoryGame isLoading={isStreaming} />;
@@ -197,12 +307,12 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick }: Qc
           backdropFilter: 'blur(32px)',
         }}>
           <div style={{ fontSize: '3rem', fontWeight: 'bold', marginBottom: '8px' }}>
-            <span style={{ color: score >= 3 ? '#4ade80' : '#ef4444' }}>{score}</span>
-            <span style={{ color: dark ? '#94a3b8' : '#64748b' }}>/5</span>
+            <span style={{ color: score >= Math.ceil(totalQuestions * 0.6) ? '#4ade80' : '#ef4444' }}>{score}</span>
+            <span style={{ color: dark ? '#94a3b8' : '#64748b' }}>/{totalQuestions || maxQuestions}</span>
           </div>
           <p style={{ color: dark ? '#e2e8f0' : '#0f172a' }}>
-            {score === 5 ? '🎉 Parfait ! Excellent travail !' :
-             score >= 3 ? '👏 Bien joué ! Continue comme ça !' :
+            {score === totalQuestions ? '🎉 Parfait ! Excellent travail !' :
+             score >= Math.ceil(totalQuestions * 0.6) ? '👏 Bien joué ! Continue comme ça !' :
              '📖 Continue à réviser, tu vas y arriver !'}
           </p>
         </div>

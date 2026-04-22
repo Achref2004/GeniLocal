@@ -123,7 +123,12 @@ export const IaTaskProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       const queryObj: any = { mode, text, subject, language };
       if (existingQuestion) {
-        queryObj.question = existingQuestion;
+        // For qcm_remedial mode, pass the topics as wrongTopics
+        if (mode === 'qcm_remedial') {
+          queryObj.wrongTopics = existingQuestion;
+        } else {
+          queryObj.question = existingQuestion;
+        }
       }
 
       const controller = fetchStream(

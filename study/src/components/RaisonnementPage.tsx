@@ -179,8 +179,9 @@ export default function RaisonnementPage() {
   }, [text, subject, qrQuestion, startStreamTask]);
 
   const handleRemediaq = useCallback((wrongQuestions: any[], wrongIndexes: number[]) => {
-    // Créer une description des sujets des questions incorrectes
-    const topics = wrongQuestions.map(q => q.question).join(' | ');
+    const topics = wrongQuestions
+      .map((q, idx) => `${idx + 1}. ${q.question}`)
+      .join('\n');
     setRemedialWrongTopics(topics);
     setActiveMode('qcm_remedial');
     const tid = startStreamTask('qcm_remedial', text, subject || 'Remedial', detectLanguage(text), topics);
@@ -197,9 +198,12 @@ export default function RaisonnementPage() {
       if (item.mode === 'resume') {
         setActiveMode('resume');
         setStreamContent(item.result);
-      } else if (item.mode === 'qcm' || item.mode === 'qcm_remedial') {
-        setActiveMode(item.mode as any);
+      } else if (item.mode === 'qcm') {
+        setActiveMode('qcm');
         setRawQcmContent(item.result);
+      } else if (item.mode === 'qcm_remedial') {
+        setActiveMode('qcm_remedial');
+        setRawRemedialContent(item.result);
       } else if (item.mode === 'qr') {
         setActiveMode('qr');
         if (item.question) setQrQuestion(item.question);
@@ -621,6 +625,7 @@ export default function RaisonnementPage() {
                     <QcmView
                       rawContent={rawRemedialContent}
                       isStreaming={isStreaming}
+                      maxQuestions={3}
                     />
                   </div>
                 </div>

@@ -22,8 +22,6 @@ export function AnimatedRoutes() {
           <Route path="/" element={<BookCover />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignUpPage />} />
-          
-          {/* espace Admin */}
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/statistics" element={<StatisticsPage />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />

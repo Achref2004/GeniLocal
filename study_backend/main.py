@@ -647,7 +647,14 @@ OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "mistral"
 
 
-def build_ia_prompt(mode: str, text: str, subject: str = "", user_answer: str = "", language: str = "fr") -> str:
+def build_ia_prompt(
+    mode: str,
+    text: str,
+    subject: str = "",
+    user_answer: str = "",
+    language: str = "fr",
+    wrong_topics: str = "",
+) -> str:
     lang = language.lower() if language else 'fr'
     if lang not in ('fr', 'en', 'ar'):
         lang = 'fr'
@@ -696,6 +703,34 @@ def build_ia_prompt(mode: str, text: str, subject: str = "", user_answer: str = 
             f"Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni apres, dans ce format exact:\n"
             f'[{{"question":"...","choices":["Option A","Option B","Option C","Option D"],"correct":0}}]\n'
             f"Texte:\n{text}"
+        )
+    elif mode == "qcm_remedial":
+        topics = (wrong_topics or "").strip() or "les notions mal comprises"
+        if lang == "en":
+            return (
+                f"You are an expert teacher. The learner struggled with these items:\n{topics}\n\n"
+                f"Generate exactly 3 clear multiple-choice questions in ENGLISH based on the reference text below. "
+                f"Each question must have exactly 4 options and one correct answer (index 0-3 in field \"correct\"). "
+                f"Respond ONLY with a JSON array, no markdown, no extra text, in this exact shape:\n"
+                f'[{{"question":"...","choices":["A","B","C","D"],"correct":0}}]\n\n'
+                f"Reference text:\n{text}"
+            )
+        if lang == "ar":
+            return (
+                f"أنت معلم خبير. واجه المتعلم صعوبات في:\n{topics}\n\n"
+                f"أنشئ بالضبط 3 أسئلة اختيار من متعدد واضحة بالعربية من النص المرجعي. "
+                f"لكل سؤال 4 خيارات وإجابة صحيحة واحدة (حقل correct من 0 إلى 3). "
+                f"أجب فقط بمصفوفة JSON بدون markdown:\n"
+                f'[{{"question":"...","choices":["أ","ب","ج","د"],"correct":0}}]\n\n'
+                f"النص:\n{text}"
+            )
+        return (
+            f"Tu es un professeur expert. L'apprenant a eu des difficultés sur les sujets suivants :\n{topics}\n\n"
+            f"Génère exactement 3 questions QCM SIMPLES en FRANÇAIS, basées sur le texte de référence ci-dessous, "
+            f"pour consolider ces notions. Chaque question : exactement 4 choix, une seule bonne réponse (champ \"correct\" = 0 à 3). "
+            f"Réponds UNIQUEMENT avec un tableau JSON (commence par [ et finit par ]), sans markdown, sans texte avant ou après :\n"
+            f'[{{"question":"...","choices":["Option A","Option B","Option C","Option D"],"correct":0}}]\n\n'
+            f"Texte de référence :\n{text}"
         )
     elif mode == "qr_question":
         if lang == 'en':
@@ -823,6 +858,7 @@ async def ia_generate(request: Request, db: Session = Depends(get_db)):
     subject = body.get("subject", "")
     user_answer = body.get("user_answer", "")
     language = body.get("language", "fr")
+    wrong_topics = body.get("wrongTopics") or body.get("wrong_topics") or ""
 
     # --- Cache lookup (only for cacheable modes without user_answer) ---
     cacheable_modes = ("resume", "qcm", "qr_question", "qcm_remedial")
@@ -842,9 +878,11 @@ async def ia_generate(request: Request, db: Session = Depends(get_db)):
         except Exception:
             pass
 
+    cache_extra = wrong_topics.strip() if mode == "qcm_remedial" else ""
+
     if user_id and mode in cacheable_modes and not user_answer:
         sqlite_db = SqliteSession()
-        input_hash = IaCache.compute_hash(text, mode, subject, language)
+        input_hash = IaCache.compute_hash(text, mode, subject, language, cache_extra)
         try:
             cached = sqlite_db.query(IaCache).filter(
                 IaCache.user_id == user_id,
@@ -867,11 +905,12 @@ async def ia_generate(request: Request, db: Session = Depends(get_db)):
             sqlite_db.close()
 
     # --- CACHE MISS — stream from Ollama ---
-    prompt = build_ia_prompt(mode, text, subject, user_answer, language)
-    is_json = (mode == "qcm")
+    prompt = build_ia_prompt(mode, text, subject, user_answer, language, wrong_topics)
+    # Ollama "format":"json" often wraps arrays as odd objects (e.g. {"[...]":{}}); plain JSON in the prompt is more reliable.
+    is_json = False
 
     if user_id and mode in cacheable_modes and not user_answer:
-        input_hash = IaCache.compute_hash(text, mode, subject, language)
+        input_hash = IaCache.compute_hash(text, mode, subject, language, cache_extra)
         return StreamingResponse(
             stream_ollama_and_cache(prompt, is_json, user_id, input_hash, mode, subject, text),
             media_type="text/event-stream",

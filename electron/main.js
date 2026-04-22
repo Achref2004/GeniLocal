@@ -189,7 +189,7 @@ function createWindow() {
       enableRemoteModule: false,
       sandbox: true,
     },
-    icon: path.join(__dirname, '../assets/icon.png'),
+    icon: path.join(__dirname, 'logoo_genilocal.png'),
   });
 
   // Load app

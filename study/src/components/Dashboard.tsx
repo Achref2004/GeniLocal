@@ -22,10 +22,10 @@ interface UserStats {
 }
 
 const DEFAULT_ACTIVITY_DATA = [
-    { name: 'Lun', hours: 2 }, { name: 'Mar', hours: 2.5 },
-    { name: 'Mer', hours: 1.5 }, { name: 'Jeu', hours: 3 },
-    { name: 'Ven', hours: 2.2 }, { name: 'Sam', hours: 4 },
-    { name: 'Dim', hours: 2.8 },
+    { name: 'Lun', hours: 0 }, { name: 'Mar', hours: 0 },
+    { name: 'Mer', hours: 0 }, { name: 'Jeu', hours: 0 },
+    { name: 'Ven', hours: 0 }, { name: 'Sam', hours: 0 },
+    { name: 'Dim', hours: 0 },
 ];
 
 const STARS = Array.from({ length: 60 }, (_, i) => ({
@@ -92,14 +92,18 @@ const Dashboard: React.FC = () => {
     // Charger les données de progression depuis l'historique
     useEffect(() => {
         const loadProgressData = async () => {
+            // njib fichier eli fih historique 
             const history = await loadHistory();
+            //n5abiha f el stat 
             setHistoryData(history);
+            //fi west el historique w t-talla3 mennou el progression
             const progress = aggregateProgress(history);
+            //lhna setprogressData(progress); retbthm eli jee le5r yo5rej lawel 
             setProgressData(progress.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime()));
         };
 
         loadProgressData();
-        const interval = setInterval(loadProgressData, 2000); // Rafraîchir toutes les 2s
+        const interval = setInterval(loadProgressData, 30000); // Rafraîchir toutes les 30s
         return () => clearInterval(interval);
     }, []);
 
@@ -109,7 +113,9 @@ const Dashboard: React.FC = () => {
             totalSubjects: progressData.length,
         };
     }, [progressData]);
+//i-jiw mel serveur k-enhom "Klem" (String) maktoub hakka
 
+//jSON.parse: Hadhi t-rod el "Klem" hadhika l-"Lista" (Array) shiha bech najmou n-warriwhom ka3ba ka3ba. Ken famma ghalta fi el klem, yrajja3 lista fergha []
     const badgeList = useMemo(() => {
         try {
             const list = JSON.parse(stats.badges || '[]');
@@ -118,7 +124,7 @@ const Dashboard: React.FC = () => {
             return [];
         }
     }, [stats.badges]);
-
+// Calculer l'activité hebdomadaire à partir de l'historique
     const weeklyActivity = useMemo(() => {
         const now = new Date();
         const rawDays = Array.from({ length: 7 }, (_, index) => {
@@ -145,7 +151,7 @@ const Dashboard: React.FC = () => {
             hours: Math.max(0, Math.round((totalHours * (day.count / totalCount)) * 10) / 10),
         }));
     }, [historyData, stats.total_study_seconds]);
-
+// Formatage du temps d'étude en HH:MM:SS
     const formatTime = (s: number) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
@@ -160,7 +166,7 @@ const Dashboard: React.FC = () => {
     const renderContent = () => {
         if (activeTab !== 'resume') {
             const icons: Record<string, React.ReactNode> = {
-                librairie: <BookOpen size={56} />, psy: <Brain size={56} />, planning: <Calendar size={56} />,
+                 planning: <Calendar size={56} />,
             };
             const labels: Record<string, string> = {
                 planning: 'Mon Planning',
@@ -214,6 +220,7 @@ const Dashboard: React.FC = () => {
                             (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                         }}
                     >
+                        // Carte de progression
                         <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, background: '#8b5cf6', borderRadius: '50%', filter: 'blur(36px)', opacity: 0.35 }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, position: 'relative', zIndex: 1 }}>
                             <div style={{ width: 48, height: 48, background: '#8b5cf6', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 8px 20px #8b5cf640` }}>
@@ -232,6 +239,7 @@ const Dashboard: React.FC = () => {
                        
                     </div>
                 </div>
+                        //container de l'activité hebdomadaire
                 <div style={{ display: 'grid', gridTemplateColumns: '20fr 1fr', gap: 20, marginBottom: 24 }}>
                     <div style={card({ padding: '28px 10px', position: 'relative', overflow: 'hidden' })}>
                         <div style={{ position: 'absolute', top: -400, right: -40, width: 260, height: 160, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.08 }} />
@@ -255,7 +263,7 @@ const Dashboard: React.FC = () => {
 
                     
                 </div>
-
+// Modal de badges
                 {showBadges && (() => {
                     const BADGE_CATALOG = [
                         { title: 'Premier utilisation', icon: <Star size={22} />, color: '#f50b0bff', desc: 'Première action sur la plateforme' },
@@ -304,7 +312,7 @@ const Dashboard: React.FC = () => {
                                     <div style={{ height: '100%', width: `${(badgeList.length / BADGE_CATALOG.length) * 100}%`, borderRadius: 4, background: `linear-gradient(90deg, ${T.accent}, ${T.accentSoft})`, transition: 'width 0.5s ease' }} />
                                 </div>
                             </div>
-
+// Liste des badges
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
                                 {BADGE_CATALOG.map(badge => {
                                     const unlocked = badgeList.includes(badge.title);
@@ -455,7 +463,7 @@ const Dashboard: React.FC = () => {
                     ))}
                 </div>
             )}
-
+        // Animation des oiseaux
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
                 {BIRDS.map(b => (
                     <div key={b.id} style={{ position: 'absolute', top: b.top, left: b.rtl ? 'auto' : '-80px', right: b.rtl ? '-80px' : 'auto', animation: `${b.rtl ? 'birdFlyRtl' : 'birdFly'} ${b.duration} ${b.delay} linear infinite`, opacity: dark ? 0.13 : 0.18 }}>
@@ -485,12 +493,12 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
 
-                            {/* ✅ Bouton thème UNIQUE — contrôle toute l'app */}
+                            {/*  Bouton thème Unique — contrôle toute l'app */}
                             <button onClick={toggleTheme} title={dark ? 'Mode clair' : 'Mode sombre'}
                                 style={{ width: 48, height: 48, borderRadius: 14, border: `1px solid ${T.sidebarBorder}`, background: T.sidebarBg, color: T.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(12px)', transition: 'all .3s' }}>
                                 {dark ? <Sun size={20} /> : <Moon size={20} />}
                             </button>
-
+// Bouton de déconnexion
                             <button onClick={handleLogout}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 14, border: `1px solid rgba(239,68,68,0.35)`, background: dark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.08)', color: '#ef4444', fontWeight: 700, fontSize: 14, cursor: 'pointer', backdropFilter: 'blur(12px)', transition: 'all .25s' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.18)'; }}
