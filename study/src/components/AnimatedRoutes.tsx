@@ -1,3 +1,4 @@
+import React from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { BookCover } from './BookCover';
@@ -12,6 +13,7 @@ import Profile from './Profile';
 import RaisonnementPage from './RaisonnementPage';
 import ProgressionPage from './ProgressionPage';
 import PlanningPage from './PlanningPage';
+import DescriptionPage from './DescriptionPage';
 export function AnimatedRoutes() {
   const location = useLocation();
 
@@ -31,6 +33,7 @@ export function AnimatedRoutes() {
           <Route path="/raisonnement" element={<RaisonnementPage />} />
           <Route path="/progression" element={<ProgressionPage />} />
           <Route path="/planning" element={<PlanningPage />} />
+          <Route path="/description" element={<DescriptionPage />} />
         </Routes>
       </AnimatePresence>
     </div>

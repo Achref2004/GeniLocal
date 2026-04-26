@@ -1,150 +1,390 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, HelpCircle } from 'lucide-react';
 import { useTheme } from './Themecontext';
-import logoGeniLocal from '../assets/logoo_genilocal.png';
+
+const NAV_LINKS = [
+  { label: 'Cours', to: '/dashboard' },
+  { label: 'Communauté', to: '/progression' },
+  { label: 'Blog', to: '#' },
+  { label: 'À propos', to: '/description' },
+] as const;
+
+const LEGAL_LINKS = [
+  { label: 'Confidentialité', to: '#' },
+  { label: 'Conditions', to: '#' },
+  { label: 'Contact', to: '#' },
+] as const;
 
 export default function Footer() {
   const { dark, T } = useTheme();
 
-  const accentColor = '#3b82f6'; // Bleu éducatif moderne
+  const footerBg = dark
+    ? `linear-gradient(165deg, ${T.card} 0%, ${T.bg} 55%, #040608 100%)`
+    : `linear-gradient(165deg, ${T.card} 0%, ${T.bg} 45%, #b8d4ef 100%)`;
+
+  const glow = dark
+    ? `radial-gradient(ellipse 70% 50% at 50% 20%, ${T.accent}33 0%, transparent 55%)`
+    : `radial-gradient(ellipse 65% 45% at 50% 15%, ${T.accent}28 0%, transparent 50%)`;
+
+  const surfaceMuted = dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,31,63,0.06)';
+  const divider = dark ? 'rgba(255,255,255,0.08)' : T.border;
+  const linkIdle = T.textOnCardMuted;
+  const dot3 = dark ? '#4aa8ff' : T.cardAlt;
 
   return (
-    <footer style={{
-      marginTop: 60,
-      width: '100%',
-      padding: '60px 40px 30px',
-      background: dark 
-        ? 'linear-gradient(180deg, rgba(15, 23, 42, 0.8) 0%, rgba(2, 3, 6, 1) 100%)' 
-        : 'linear-gradient(180deg, rgba(248, 250, 252, 0.8) 0%, rgba(238, 242, 255, 1) 100%)',
-      borderRadius: '40px 40px 0 0', // Arrondi uniquement en haut pour l'effet "vague"
-      borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(15,23,42,0.05)'}`,
-      color: T.textOnCard,
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* Éléments décoratifs animés en arrière-plan */}
-      <div style={{
-        position: 'absolute',
-        top: -100,
-        right: -100,
-        width: 300,
-        height: 300,
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0) 70%)',
-        filter: 'blur(40px)',
-        zIndex: 0,
-        animation: 'pulse 8s infinite alternate'
-      }} />
+    <footer
+      style={{
+        marginTop: 56,
+        width: '100%',
+        position: 'relative',
+        overflow: 'hidden',
+        borderRadius: '32px 32px 0 0',
+        color: T.textOnCard,
+        background: footerBg,
+        borderTop: `1px solid ${T.border}`,
+        boxShadow: dark ? '0 -24px 80px rgba(0,0,0,0.35)' : '0 -12px 48px rgba(11,42,74,0.06)',
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background: glow,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 48,
+          background: dark
+            ? 'linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 100%)'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.65) 0%, transparent 100%)',
+          filter: 'blur(12px)',
+          opacity: 0.85,
+          pointerEvents: 'none',
+        }}
+      />
 
       <style>{`
-        @keyframes pulse {
-          0% { transform: scale(1); opacity: 0.5; }
-          100% { transform: scale(1.2); opacity: 0.8; }
-        }
-        @keyframes float {
-          0%, 100% { transform: translateY(0px); }
-          50% { transform: translateY(-10px); }
-        }
-        .footer-link {
-          transition: all 0.3s ease;
+        .footer-grid {
+          display: grid;
+          gap: 40px;
+          align-items: center;
+          max-width: 1180px;
+          margin: 0 auto;
+          padding: 48px 28px 36px;
           position: relative;
-          display: inline-block;
+          z-index: 1;
+          grid-template-columns: 1fr;
         }
-        .footer-link:hover {
-          color: ${accentColor} !important;
-          transform: translateX(5px);
+        @media (min-width: 960px) {
+          .footer-grid {
+            grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.55fr) minmax(0, 1fr);
+            gap: 32px 48px;
+            padding: 52px 40px 40px;
+          }
         }
-        .social-icon:hover {
-          transform: translateY(-5px) scale(1.1);
-          background: ${accentColor} !important;
-          color: white !important;
+        .footer-cta-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 14px 26px;
+          border-radius: 999px;
+          font-weight: 700;
+          font-size: 15px;
+          border: none;
+          cursor: pointer;
+          text-decoration: none;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+        }
+        .footer-cta-btn:hover {
+          transform: translateY(-2px);
+          filter: brightness(1.05);
+        }
+        .footer-ghost-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 14px 22px;
+          border-radius: 999px;
+          font-weight: 600;
+          font-size: 15px;
+          border: 1px solid ${T.border};
+          background: ${surfaceMuted};
+          color: ${T.textOnCard};
+          cursor: pointer;
+          text-decoration: none;
+          transition: background 0.2s ease, border-color 0.2s ease;
+        }
+        .footer-ghost-btn:hover {
+          background: ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,31,63,0.08)'};
+          border-color: ${T.accent};
+        }
+        .footer-col-link {
+          color: ${T.textOnCard};
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 500;
+          opacity: 0.92;
+          transition: color 0.2s ease, opacity 0.2s ease;
+        }
+        .footer-col-link:hover {
+          color: ${T.accent};
+          opacity: 1;
+        }
+        .footer-social {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+          color: ${T.textOnCard};
+          background: ${surfaceMuted};
+          border: 1px solid ${divider};
+          transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+        }
+        .footer-social:hover {
+          background: ${T.accent};
+          color: ${T.saveBtnText};
+          border-color: transparent;
+        }
+        @keyframes footer-float {
+          0%, 100% { transform: rotate(-7deg) translateY(0); }
+          50% { transform: rotate(-7deg) translateY(-8px); }
+        }
+        .footer-icon-card {
+          animation: footer-float 5s ease-in-out infinite;
         }
       `}</style>
 
-      <div style={{
-        maxWidth: 1200,
-        margin: '0 auto',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: 40,
-        position: 'relative',
-        zIndex: 1
-      }}>
-        {/* Colonne Marque */}
-        <div style={{ gridColumn: 'span 1.5' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 15, marginBottom: 20, animation: 'float 5s ease-in-out infinite' }}>
-            <img src={logoGeniLocal} alt="Logo" style={{ width: 50, height: 50, borderRadius: 15 }} />
-            <span style={{ fontSize: 24, fontWeight: 900, background: `linear-gradient(to right, ${accentColor}, #8b5cf6)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              GeniLocal
-            </span>
+      <div className="footer-grid">
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.accent }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: T.accentSoft }} />
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: dot3 }} />
           </div>
-          <p style={{ fontSize: 15, lineHeight: '1.6', opacity: 0.7, marginBottom: 20, maxWidth: 300 }}>
-            L'excellence éducative propulsée par l'intelligence artificielle trilingue.
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 'clamp(1.55rem, 2.5vw, 2rem)',
+              fontWeight: 800,
+              letterSpacing: '-0.02em',
+              lineHeight: 1.15,
+              color: T.text,
+            }}
+          >
+            Prêt à commencer ?
+          </h2>
+          <p
+            style={{
+              margin: '14px 0 26px',
+              maxWidth: 400,
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: linkIdle,
+            }}
+          >
+            Rejoignez des milliers d’étudiants qui transforment leur avenir avec GeniLocal et l’IA au service de vos révisions.
           </p>
-          
-          {/* Status Badge */}
-          <div style={{ 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: 8, 
-            padding: '6px 12px', 
-            borderRadius: 20, 
-            background: dark ? 'rgba(34, 197, 94, 0.1)' : '#f0fdf4',
-            border: '1px solid rgba(34, 197, 94, 0.2)'
-          }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 10px #22c55e' }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: '#22c55e' }}>Système IA Opérationnel</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            <Link
+              to="/raisonnement"
+              className="footer-cta-btn"
+              style={{
+                background: T.saveBtnGrad,
+                color: T.saveBtnText,
+                boxShadow: dark ? '0 12px 32px rgba(0,212,224,0.25)' : '0 10px 28px rgba(0,140,148,0.22)',
+              }}
+            >
+              Commencer gratuitement
+              <ArrowRight size={18} strokeWidth={2.5} />
+            </Link>
+            <Link to="/description" className="footer-ghost-btn">
+              En savoir plus
+            </Link>
           </div>
         </div>
 
-        {/* Liens de Navigation */}
-        {[
-          { title: 'Apprentissage', links: ['Cours interactifs', 'Badges & Succès', 'Quiz IA'] },
-          { title: 'Communauté', links: ['Forum', 'Événements', 'Blog'] },
-          { title: 'Support', links: ['Centre d\'aide', 'Contact', 'FAQ'] }
-        ].map((section, idx) => (
-          <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
-            <span style={{ fontSize: 16, fontWeight: 800, marginBottom: 5 }}>{section.title}</span>
-            {section.links.map(link => (
-              <a key={link} href="#" className="footer-link" style={{ 
-                textDecoration: 'none', 
-                fontSize: 14, 
-                color: dark ? '#9ca3af' : '#64748b' 
-              }}>
-                {link}
-              </a>
-            ))}
+        <div
+          className="footer-icon-card"
+          style={{
+            justifySelf: 'center',
+            width: 112,
+            height: 112,
+            borderRadius: 28,
+            background: '#ffffff',
+            border: `1px solid ${dark ? 'rgba(0,212,224,0.2)' : 'rgba(0,31,63,0.1)'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: dark
+              ? '0 20px 50px rgba(0,0,0,0.35)'
+              : '0 16px 40px rgba(11,42,74,0.12)',
+            padding: 14,
+            boxSizing: 'border-box',
+          }}
+        >
+          <img
+            src="/assets/logoo_genilocal.png"
+            alt="GeniLocal"
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              display: 'block',
+            }}
+          />
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 28,
+            alignContent: 'start',
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: linkIdle,
+                marginBottom: 14,
+              }}
+            >
+              Navigation
+            </div>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {NAV_LINKS.map(({ label, to }) =>
+                to === '#' ? (
+                  <a key={label} href="#" className="footer-col-link">
+                    {label}
+                  </a>
+                ) : (
+                  <Link key={label} to={to} className="footer-col-link">
+                    {label}
+                  </Link>
+                ),
+              )}
+            </nav>
           </div>
-        ))}
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: linkIdle,
+                marginBottom: 14,
+              }}
+            >
+              Légal
+            </div>
+            <nav style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {LEGAL_LINKS.map(({ label, to }) => (
+                <a key={label} href={to} className="footer-col-link">
+                  {label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        </div>
       </div>
 
-      {/* Barre de fin */}
-      <div style={{
-        maxWidth: 1200,
-        margin: '40px auto 0',
-        paddingTop: 25,
-        borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 20
-      }}>
-        <span style={{ fontSize: 13, opacity: 0.6 }}>© 2026 GeniLocal. Fait avec passion pour le futur.</span>
-        
-        <div style={{ display: 'flex', gap: 15 }}>
-          {['facebook', 'twitter', 'linkedin'].map((social) => (
-            <a key={social} href="#" className="social-icon" style={{
-              width: 38, height: 38, borderRadius: 10,
-              background: dark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.03)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-              color: 'inherit'
-            }}>
-              {/* Gardez vos SVGs ici */}
-              <div style={{ width: 18, height: 18, background: 'currentColor', mask: `url(/icons/${social}.svg) no-repeat center` }} />
+      <div
+        style={{
+          maxWidth: 1180,
+          margin: '0 auto',
+          padding: '0 28px 28px',
+          position: 'relative',
+          zIndex: 1,
+        }}
+      >
+        <div
+          style={{
+            height: 1,
+            background: divider,
+            opacity: dark ? 1 : 0.85,
+            marginBottom: 20,
+          }}
+        />
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <span style={{ fontSize: 13, color: linkIdle }}>
+            © 2026 GeniLocal ✨
+          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <a href="#" className="footer-social" aria-label="Twitter">
+              T
             </a>
-          ))}
+            <a href="#" className="footer-social" aria-label="Instagram">
+              I
+            </a>
+            <a href="#" className="footer-social" aria-label="LinkedIn">
+              L
+            </a>
+          </div>
         </div>
       </div>
+
+      <button
+        type="button"
+        title="Aide"
+        aria-label="Aide"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        style={{
+          position: 'absolute',
+          right: 18,
+          bottom: 18,
+          width: 44,
+          height: 44,
+          borderRadius: '50%',
+          border: `1px solid ${divider}`,
+          background: surfaceMuted,
+          color: T.textOnCard,
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 2,
+          transition: 'background 0.2s ease, border-color 0.2s ease, color 0.2s ease',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = T.accent;
+          (e.currentTarget as HTMLButtonElement).style.color = T.saveBtnText;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent';
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLButtonElement).style.background = surfaceMuted;
+          (e.currentTarget as HTMLButtonElement).style.color = T.textOnCard;
+          (e.currentTarget as HTMLButtonElement).style.borderColor = divider;
+        }}
+      >
+        <HelpCircle size={22} strokeWidth={2} />
+      </button>
     </footer>
   );
 }

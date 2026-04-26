@@ -76,7 +76,7 @@ export function SignUpPage() {
 
           <div className="relative z-10 text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-6 bg-[#eae4d3] border border-[#cdaa6a] shadow-inner overflow-hidden">
-              <img src="/assets/logo_genilocal.png" alt="Logo GeniLocal" className="w-14 h-14 object-contain" />
+              <img src="/assets/logoo_genilocal.png" alt="Logo GeniLocal" className="w-14 h-14 object-contain" />
             </div>
 
             <h2 className="font-serif text-3xl mb-2 text-[#3a3f3b]">Les Fondations</h2>
@@ -86,11 +86,10 @@ export function SignUpPage() {
               "Chaque grand esprit a un jour commencé par inscrire son nom dans les registres du savoir."
             </p>
 
-            <div className="w-full h-48 rounded-md overflow-hidden border-2 border-[#d1cab5] shadow-md">
+            <div >
               <img
-                src="/assets/image2-signup.png"
+                src="/assets/sign_up.png"
                 alt="Inscription GeniLocal"
-                className="w-full h-full object-cover sepia-[0.3]"
               />
             </div>
           </div>

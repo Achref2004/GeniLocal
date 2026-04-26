@@ -354,11 +354,10 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
                 z-index: 1;
             }}
             .logo {{
-                font-size: 36px;
+                font-size: 37px;
                 font-weight: bold;
                 margin-bottom: 20px;
                 letter-spacing: 2px;
-                color: #e8d5b7;
                 text-shadow: 2px 2px 4px rgba(0,0,0,0.7), 0 0 8px rgba(0,0,0,0.5);
             }}
             .greeting {{
@@ -459,8 +458,7 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
             <div class="card">
                 <div class="card-content">
                     <!-- Logo -->
-                    <div class="logo"> GeniLocal</div>
-
+                    <div class="logo"> <span style="color: #0b57a0;">Geni</span><span style="color:#763349 ;">Local</span></div>
                     <!-- Greeting with user name -->
                     <div class="greeting">Bienvenue</div>
                     <div class="user-name">{username}</div>
@@ -486,11 +484,6 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
                         <div class="author">Créé par Achref Jnayeh</div>
                         <div class="message">✨ Bonne chance champione dans vos apprentissages! ✨</div>
                     </div>
-
-                    <!-- Main footer -->
-                    <div class="footer">
-                        © 2026 Study
-                    </div>
                 </div>
             </div>
         </div>
@@ -499,7 +492,7 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
     """
 
     message = MessageSchema(
-        subject="🔐 Réinitialisation de votre mot de passe Study",
+        subject=" Réinitialisation de votre mot de passe GeniLocal",
         recipients=[user.email],
         body=html_body,
         subtype=MessageType.html

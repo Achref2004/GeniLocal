@@ -239,7 +239,7 @@ const Dashboard: React.FC = () => {
                        
                     </div>
                 </div>
-                        //container de l'activité hebdomadaire
+                    {/*container de l'activité hebdomadaire*/}
                 <div style={{ display: 'grid', gridTemplateColumns: '20fr 1fr', gap: 20, marginBottom: 24 }}>
                     <div style={card({ padding: '28px 10px', position: 'relative', overflow: 'hidden' })}>
                         <div style={{ position: 'absolute', top: -400, right: -40, width: 260, height: 160, background: T.accent, borderRadius: '50%', filter: 'blur(60px)', opacity: 0.08 }} />
@@ -263,7 +263,7 @@ const Dashboard: React.FC = () => {
 
                     
                 </div>
-// Modal de badges
+                {/* Modal de badges */}
                 {showBadges && (() => {
                     const BADGE_CATALOG = [
                         { title: 'Premier utilisation', icon: <Star size={22} />, color: '#f50b0bff', desc: 'Première action sur la plateforme' },
@@ -312,7 +312,7 @@ const Dashboard: React.FC = () => {
                                     <div style={{ height: '100%', width: `${(badgeList.length / BADGE_CATALOG.length) * 100}%`, borderRadius: 4, background: `linear-gradient(90deg, ${T.accent}, ${T.accentSoft})`, transition: 'width 0.5s ease' }} />
                                 </div>
                             </div>
-// Liste des badges
+                            {/* Liste des badges */}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 14 }}>
                                 {BADGE_CATALOG.map(badge => {
                                     const unlocked = badgeList.includes(badge.title);
@@ -463,7 +463,7 @@ const Dashboard: React.FC = () => {
                     ))}
                 </div>
             )}
-        // Animation des oiseaux
+        {/* Animation des oiseaux */}
             <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, overflow: 'hidden' }}>
                 {BIRDS.map(b => (
                     <div key={b.id} style={{ position: 'absolute', top: b.top, left: b.rtl ? 'auto' : '-80px', right: b.rtl ? '-80px' : 'auto', animation: `${b.rtl ? 'birdFlyRtl' : 'birdFly'} ${b.duration} ${b.delay} linear infinite`, opacity: dark ? 0.13 : 0.18 }}>
@@ -498,7 +498,7 @@ const Dashboard: React.FC = () => {
                                 style={{ width: 48, height: 48, borderRadius: 14, border: `1px solid ${T.sidebarBorder}`, background: T.sidebarBg, color: T.accent, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(12px)', transition: 'all .3s' }}>
                                 {dark ? <Sun size={20} /> : <Moon size={20} />}
                             </button>
-// Bouton de déconnexion
+                                {/* Bouton de déconnexion */}
                             <button onClick={handleLogout}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 14, border: `1px solid rgba(239,68,68,0.35)`, background: dark ? 'rgba(239,68,68,0.1)' : 'rgba(239,68,68,0.08)', color: '#ef4444', fontWeight: 700, fontSize: 14, cursor: 'pointer', backdropFilter: 'blur(12px)', transition: 'all .25s' }}
                                 onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.18)'; }}

@@ -107,7 +107,7 @@ export function LoginPage() {
             <h2 className="font-serif text-3xl mb-2 text-[#3a3f3b]">Préface</h2>
             <div className="h-px w-16 mx-auto bg-[#cdaa6a] mb-8"></div>
             <p className="font-serif text-lg italic text-[#4a524c] mb-6 leading-relaxed">
-              "let's make carthage great again "
+              "Apprendre local, briller global."
             </p>
             <div>
               <img 

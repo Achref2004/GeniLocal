@@ -140,7 +140,7 @@ export function BookCover() {
                   textShadow: '1px 1px 2px rgba(255,255,255,0.2)',
                 }}
               >
-                <span style={{ color: 'rgb(2, 84, 108)' }}>Geni</span><span style={{ color: 'rgb(133, 3, 83)' }}>Local</span>
+                <span style={{ color: ' #0b57a0' }}>Geni</span><span style={{ color: 'rgb(133, 3, 83)' }}>Local</span>
               </h1>
               <div className="h-px w-20 mx-auto bg-gradient-to-r from-transparent via-[#cdaa6a] to-transparent"></div>
             </div>
