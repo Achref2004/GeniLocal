@@ -3,6 +3,7 @@ import { useTheme } from '../../reutilisable/Themecontext';
 import { fetchStream, detectLanguage, saveToHistory } from '../../utils/api_ia';
 import { getMessageCount, incrementMessageCount, canSendMessage, getRemainingMessages, getTimeUntilReset, MAX_MESSAGES_PER_DAY } from '../../utils/chatCounter';
 import { Send, Lock } from 'lucide-react';
+import { API_BASE_URL } from '../../config';
 
 interface ChatMessage {
   id: number;
@@ -25,7 +26,7 @@ async function saveChatMessageToDatabase(message: ChatMessage, sessionId: string
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    await fetch('http://localhost:8000/api/chat/messages', {
+    await fetch(`${API_BASE_URL}/chat/messages`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -49,7 +50,7 @@ async function loadChatHistoryFromDatabase(sessionId: string): Promise<ChatMessa
     if (!token) return [];
 
     const response = await fetch(
-      `http://localhost:8000/api/chat/messages?session_id=${sessionId}&limit=50`,
+      `${API_BASE_URL}/chat/messages?session_id=${sessionId}&limit=50`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -100,7 +101,7 @@ export default function ChatView({ text, subject, onMessagesSent }: ChatViewProp
         const salut: ChatMessage = {
           id: Date.now(),
           role: 'assistant',
-          content: ` Salut khouya! Je suis là pour discuter de ${subject}. Tu peux me poser tes questions!`,
+          content: ` Salut Mon amis ! Je suis là pour discuter de ${subject}. Tu peux me poser tes questions!`,
           timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages([salut]);

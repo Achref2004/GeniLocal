@@ -29,7 +29,6 @@ export default function ProgressionPage() {
       return {
         avgQCMBefore: 0,
         avgQCMAfter: 0,
-        avgQR: 0,
         improvement: 0,
         totalSubjects: 0,
       };
@@ -37,17 +36,14 @@ export default function ProgressionPage() {
 
     const validQCMBefore = progressData.filter(p => p.qcmBefore !== null);
     const validQCMAfter = progressData.filter(p => p.qcmAfter !== null);
-    const validQR = progressData.filter(p => p.qrScore !== null);
 
     const avgQCMBefore = validQCMBefore.length > 0 ? validQCMBefore.reduce((s, p) => s + (p.qcmBefore || 0), 0) / validQCMBefore.length : 0;
     const avgQCMAfter = validQCMAfter.length > 0 ? validQCMAfter.reduce((s, p) => s + (p.qcmAfter || 0), 0) / validQCMAfter.length : 0;
-    const avgQR = validQR.length > 0 ? validQR.reduce((s, p) => s + (p.qrScore || 0), 0) / validQR.length : 0;
     const improvement = avgQCMAfter - avgQCMBefore;
 
     return {
       avgQCMBefore,
       avgQCMAfter,
-      avgQR,
       improvement,
       totalSubjects: progressData.length,
     };
@@ -190,7 +186,7 @@ export default function ProgressionPage() {
             <div
               style={{
                 display: 'grid',
-                gridTemplateColumns: '2fr 0.8fr 1.2fr 1.2fr 1.2fr 0.8fr',
+                gridTemplateColumns: '2fr 0.8fr 1.2fr 1.2fr 0.8fr',
                 gap: '16px',
                 padding: '24px',
                 background: `linear-gradient(135deg, ${T.accent}20 0%, ${T.accentSoft}10 100%)`,
@@ -206,7 +202,6 @@ export default function ProgressionPage() {
               <div style={{ textAlign: 'center' }}>Résumé</div>
               <div style={{ textAlign: 'center' }}>QCM Avant</div>
               <div style={{ textAlign: 'center' }}>QCM Après</div>
-              <div style={{ textAlign: 'center' }}>Q/R</div>
               <div style={{ textAlign: 'center' }}>Progrès</div>
             </div>
 
@@ -221,7 +216,7 @@ export default function ProgressionPage() {
                   key={idx}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '2fr 0.8fr 1.2fr 1.2fr 1.2fr 0.8fr',
+                    gridTemplateColumns: '2fr 0.8fr 1.2fr 1.2fr 0.8fr',
                     gap: '16px',
                     padding: '24px',
                     borderBottom: `2px solid ${T.border}`,
@@ -295,16 +290,6 @@ export default function ProgressionPage() {
                     )}
                   </div>
 
-                  {/* Q/R */}
-                  <div style={{ textAlign: 'center' }}>
-                    {row.qrScoreLabel !== null && row.qrScore !== null ? (
-                      <p style={{ fontSize: '1.25rem', fontWeight: 'bold', color: getGradeColor(row.qrScore), margin: 0 }} title={getGradeLabel(row.qrScore)}>
-                        {row.qrScoreLabel}
-                      </p>
-                    ) : (
-                      <p style={{ color: T.textMuted, margin: 0 }}>—</p>
-                    )}
-                  </div>
 
                   {/* Progrès */}
                   <div style={{ textAlign: 'center' }}>

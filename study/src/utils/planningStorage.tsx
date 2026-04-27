@@ -4,6 +4,7 @@
 
 import React, { ReactNode } from 'react';
 import { BookOpen, HelpCircle, Brain, Target, FileText, MessageSquare, GraduationCap, PenTool, AlertCircle, Sparkles } from 'lucide-react';
+import { API_BASE_URL as API_BASE } from '../config';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ export interface RaisonnementHistoryItem {
   correction?: string;
 }
 
-const API_BASE = 'http://localhost:8000/api';
+
 
 // ─── Notes CRUD ─────────────────────────────────────────────
 

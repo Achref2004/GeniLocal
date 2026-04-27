@@ -1,4 +1,5 @@
 // Système de comptage des messages pour 24h
+import { STORAGE_KEY_CHAT_COUNT } from '../config';
 
 export const MAX_MESSAGES_PER_DAY = 20;
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000; // en ms
@@ -8,7 +9,7 @@ interface MessageCount {
   resetTime: number; // timestamp de fin des 24h
 }
 
-const STORAGE_KEY = 'chat_message_count';
+const STORAGE_KEY = STORAGE_KEY_CHAT_COUNT;
 
 /**
  * Obtient le nombre de messages actuels

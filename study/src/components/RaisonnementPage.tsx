@@ -23,6 +23,7 @@ import {
 } from '../utils/avatarConfig';
 import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp, Upload, Loader, Eye, EyeOff, X, Check } from 'lucide-react';
 import { useIaTaskContext } from '../context/IaTaskContext';
+import { incrementImportedDocuments } from '../utils/documentCounter';
 
 // SVG Icons for action cards
 const ResumeIcon = () => (
@@ -285,6 +286,8 @@ export default function RaisonnementPage() {
   const confirmOcrText = useCallback(() => {
     setText(ocrCleanedText);
     setShowOcrReview(false);
+    // Incrémenter le compteur global de documents importés
+    incrementImportedDocuments(1);
   }, [ocrCleanedText]);
 
   return (
@@ -526,9 +529,9 @@ export default function RaisonnementPage() {
               width: 48,
               height: 48,
               borderRadius: 12,
-              background: `${T.accentSoft}20`,
-              border: `2px solid ${T.accentSoft}`,
-              color: T.accentSoft,
+              background: `${T.accent}20`,
+              border: `2px solid ${T.accent}`,
+              color: T.accent,
               cursor: 'pointer',
               transition: 'all 0.3s',
             }}
@@ -740,7 +743,9 @@ export default function RaisonnementPage() {
                           </>
                         )}
                       </button>
-
+                      
+                      <p>Seuls les fichiers en français et anglais sont acceptés. Pour l'arabe, veuillez utiliser le copier-coller le temps que nous finalisions la prise en charge.</p>      
+                          
                       {/* Error message */}
                       {ocrError && (
                         <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 500 }}>
@@ -748,6 +753,7 @@ export default function RaisonnementPage() {
                         </span>
                       )}
                     </div>
+                    
                     <span style={{ fontSize: '0.875rem', fontWeight: 500, color: T.textMuted }}>
                       {text.length > 0 ? `${text.length} caractères` : ''}
                     </span>

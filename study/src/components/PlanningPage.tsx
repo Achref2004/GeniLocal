@@ -17,6 +17,7 @@ import {
   getDaysInMonth, getFirstDayOfMonth, MONTH_NAMES, DAY_NAMES,
 } from '../utils/planningStorage';
 import './planning-styles.css';
+import { incrementImportedDocuments } from '../utils/documentCounter';
 
 // ═══════════════════════════════════════════════════════════
 //  PLANNING PAGE — Main Component
@@ -342,6 +343,10 @@ export default function PlanningPage() {
     setShowOcrReview(false);
     setOcrItems([]);
     setOcrResult(`Succès: ${validItems.length} cours importé(s) dans le calendrier !`);
+    // Incrémenter le compteur global de documents importés (1 par fichier, pas par élément extrait)
+    if (validItems.length > 0) {
+      incrementImportedDocuments(1);
+    }
   }, [ocrItems, notes]);
 
   const allOcrItemsHaveDates = useMemo(() => {

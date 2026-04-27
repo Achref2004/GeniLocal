@@ -6,7 +6,7 @@ Includes IaCache for instant re-delivery of previously generated IA responses.
 import hashlib
 
 from sqlalchemy import (
-    create_engine, Column, Integer, String, DateTime, Text, Boolean, JSON,
+    create_engine, Column, Integer, String, DateTime, Text, Boolean, JSON, Float,
     ForeignKey, Index, func
 )
 from sqlalchemy.ext.declarative import declarative_base
@@ -36,9 +36,7 @@ class IaHistory(Base):
     input_text = Column(Text, nullable=False)
     subject = Column(String(100), nullable=True, index=True)
     result = Column(Text, nullable=False)
-    question = Column(String(500), nullable=True)  # For Q/R mode
-    user_answer = Column(Text, nullable=True)  # For Q/R mode
-    correction = Column(Text, nullable=True)  # For Q/R mode
+    # question, user_answer, correction removed as requested
     meta_data = Column("metadata", JSON, nullable=True)  # tokens, time, model_version, etc
 
     __table_args__ = (
@@ -131,12 +129,13 @@ class UserProgression(Base):
     user_id = Column(Integer, nullable=False, unique=True, index=True)
     qcm_before = Column(Integer, default=0)
     qcm_after = Column(Integer, default=0)
-    qr_score = Column(Integer, default=0)
     resume_count = Column(Integer, default=0)
     total_study_time = Column(Integer, default=0)  # seconds
     last_activity = Column(DateTime, nullable=True)
+    qcm_score_avg = Column(Float, default=0.0)
+    # qr_score removed as requested
+    last_updated = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     subjects = Column(JSON, nullable=True)  # {subject: {score, count, avg_time}}
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class Backup(Base):

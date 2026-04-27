@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Variables d'environnement — NE JAMAIS COMMITTER
+.env
+.env.local
+.env.production
+# Le fichier exemple est autorisé dans Git
+!.env.example
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

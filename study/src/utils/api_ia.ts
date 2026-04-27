@@ -1,6 +1,13 @@
-const API_BASE = 'http://localhost:8000/api';
-const OLLAMA_API = 'http://localhost:11434/api/generate'; // Ollama local
-const USE_OLLAMA = true; // Toggle pour utiliser Ollama hors ligne
+import {
+  API_BASE_URL as API_BASE,
+  OLLAMA_API_GENERATE as OLLAMA_API,
+  USE_OLLAMA,
+  OLLAMA_MODEL,
+  OLLAMA_TEMPERATURE,
+  OLLAMA_NUM_PREDICT,
+  OLLAMA_CONTEXT_LENGTH,
+} from '../config';
+
 
 /**
  * Détecte la langue du texte (FR, EN, AR)
@@ -27,7 +34,7 @@ export function detectLanguage(text: string): string {
  * Génère des prompts multilingues optimisés pour Mistral 7B
  */
 function generatePrompt(mode: string, text: string, subject?: string, user_answer?: string, wrongTopics?: string, conversationHistory?: string, language?: string): string {
-  const cleanText = text.substring(0, 2000); // Limite pour performance
+  const cleanText = text.substring(0, OLLAMA_CONTEXT_LENGTH); // Limite pour performance
   const lang = language || detectLanguage(text);
 
   // Textes multilingues
@@ -307,11 +314,11 @@ function fetchStreamOllama(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'mistral', // Votre modèle Ollama
+      model: OLLAMA_MODEL,
       prompt: prompt,
       stream: true,
-      temperature: 0.7,
-      num_predict: 500,
+      temperature: OLLAMA_TEMPERATURE,
+      num_predict: OLLAMA_NUM_PREDICT,
     }),
     signal: controller.signal,
   })

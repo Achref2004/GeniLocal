@@ -18,6 +18,12 @@ import json
 import os
 import sys
 import tempfile
+from dotenv import load_dotenv
+
+load_dotenv()
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 
 # Création des tables (main database)
 models.Base.metadata.create_all(bind=engine)
@@ -29,7 +35,7 @@ SqliteBase.metadata.create_all(bind=sqlite_engine)
 app = FastAPI(title="GeniLocal API")
 
 # Middleware
-app.add_middleware(SessionMiddleware, secret_key="ton_secret_pour_les_sessions_etudes_achref")
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", "ton_secret_pour_les_sessions_etudes_achref"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -40,11 +46,11 @@ app.add_middleware(
 
 # Configuration Email
 conf = ConnectionConfig(
-    MAIL_USERNAME = "achrefjnayeh@gmail.com",
-    MAIL_PASSWORD = "anqfrbovynwirqiy", 
-    MAIL_FROM = "achrefjnayeh@gmail.com",
-    MAIL_PORT = 587,
-    MAIL_SERVER = "smtp.gmail.com",
+    MAIL_USERNAME = os.getenv("MAIL_USERNAME"),
+    MAIL_PASSWORD = os.getenv("MAIL_PASSWORD"), 
+    MAIL_FROM = os.getenv("MAIL_FROM"),
+    MAIL_PORT = int(os.getenv("MAIL_PORT", 587)),
+    MAIL_SERVER = os.getenv("MAIL_SERVER", "smtp.gmail.com"),
     MAIL_STARTTLS = True,
     MAIL_SSL_TLS = False,
     USE_CREDENTIALS = True,
@@ -101,15 +107,15 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 oauth = OAuth()
 oauth.register(
     name='google',
-    client_id='708566411731-vpgbh8iapqckqckcoqpm6hrc4dm46abe.apps.googleusercontent.com',
-    client_secret='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',
+    client_id=os.getenv("GOOGLE_CLIENT_ID"),
+    client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
 
 @app.get("/login/google")
 async def login_google(request: Request):
-    redirect_uri = "http://localhost:8000/auth/google/callback"
+    redirect_uri = f"{BACKEND_URL}/auth/google/callback"
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @app.get("/auth/google/callback")
@@ -131,7 +137,7 @@ async def auth_google(request: Request, db: Session = Depends(get_db)):
         db.commit()
 
     access_token = auth.create_access_token(data={"sub": user.email, "is_admin": user.is_admin})
-    return RedirectResponse(url=f"http://localhost:5173/login?token={access_token}")
+    return RedirectResponse(url=f"{FRONTEND_URL}/login?token={access_token}")
 
 # --- PROFIL UTILISATEUR (FIXED) ---
 
@@ -320,7 +326,7 @@ async def forgot_password(email_schema: schemas.ForgotPasswordRequest, db: Sessi
         raise HTTPException(status_code=400, detail="Ce compte utilise Google.")
 
     reset_token = auth.create_access_token(data={"sub": user.email})
-    link = f"http://localhost:5173/reset-password?token={reset_token}"
+    link = f"{FRONTEND_URL}/reset-password?token={reset_token}"
 
     # Créer un template HTML 
     username = user.fullname or user.username or "Utilisateur"
@@ -636,8 +642,8 @@ def get_admin_stats(db: Session = Depends(get_db), current_admin: models.User = 
 # MODULE IA — RAISONNEMENT (Ollama / Mistral Streaming)
 # ══════════════════════════════════════════════════════════════
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "mistral"
+OLLAMA_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/api/generate")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "mistral")
 
 
 def build_ia_prompt(
@@ -1220,7 +1226,14 @@ from typing import List
 @app.get("/api/history", response_model=List[schemas.IaHistoryOut])
 def get_ia_history(db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
     from sqlite_models import IaHistory
-    return db.query(IaHistory).filter(IaHistory.user_id == current_user.id).order_by(IaHistory.timestamp.desc()).all()
+    try:
+        items = db.query(IaHistory).filter(IaHistory.user_id == current_user.id).order_by(IaHistory.timestamp.desc()).all()
+        # Filter out any None items (can happen with corrupted rows)
+        return [item for item in items if item is not None]
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return []
 
 @app.post("/api/history", response_model=schemas.IaHistoryOut)
 def save_ia_history(history_in: schemas.IaHistoryCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):

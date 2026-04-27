@@ -8,6 +8,13 @@
  * 4. Vérifier: curl http://localhost:11434/api/tags
  */
 
+import {
+  OLLAMA_BASE_URL,
+  OLLAMA_MODEL,
+  OLLAMA_TEMPERATURE,
+  OLLAMA_CONTEXT_LENGTH,
+} from '../config';
+
 export interface OllamaConfig {
   endpoint: string;
   model: string;
@@ -18,11 +25,11 @@ export interface OllamaConfig {
 }
 
 export const OLLAMA_CONFIG: OllamaConfig = {
-  endpoint: 'http://localhost:11434',
-  model: 'mistral', // Assurez-vous que mistral est installé
+  endpoint: OLLAMA_BASE_URL,
+  model: OLLAMA_MODEL,
   enabled: true,
-  temperature: 0.7, // 0-1: plus bas = plus déterministe
-  contextLength: 2000, // Limite du texte d'entrée
+  temperature: OLLAMA_TEMPERATURE,
+  contextLength: OLLAMA_CONTEXT_LENGTH,
   timeoutMs: 120000, // 2 minutes timeout
 };
 

@@ -5,10 +5,15 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 import models, database
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Ceci indique à FastAPI où chercher le jeton (dans l'en-tête Authorization)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 # --- CONFIGURATION DU JETON ---
-SECRET_KEY = "TON_SECRET_TRES_PRIVE_ET_UNIQUE" # Change-le par une phrase longue
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "TON_SECRET_TRES_PRIVE_ET_UNIQUE")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 # Le badge expire après 1 heure
 

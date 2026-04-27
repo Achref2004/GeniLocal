@@ -7,6 +7,7 @@ import MarkLib from 'mark.js';
 import AvatarReader from './AvatarReader';
 import useSpeechSynthesis from '../../hooks/useSpeechSynthesis';
 import type { AvatarConfig } from '../../utils/avatarConfig';
+import { UserStar } from 'lucide-react';
 
 interface ResumeViewProps {
   content: string;
@@ -85,21 +86,15 @@ export default function ResumeView({ content, isStreaming, subject, avatarConfig
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-8 w-1 rounded-full bg-gradient-to-b from-sky-400 to-sky-600" />
-            <h2 className="text-xl font-bold text-sky-300">📚 {subject}</h2>
+            <h2 className="text-xl font-bold text-red-600">📚 {subject}</h2>
           </div>
-          {!isStreaming && content && !showReader && voices.length > 0 && (
-            <button
-              onClick={handleStartReading}
-              className="ia-read-btn"
-            >
-              <span>🔊</span> Lire avec l'avatar
-            </button>
-          )}
+          
+         
         </div>
       )}
 
       {/* Content */}
-      <div className="ia-glass-card rounded-xl p-6" style={{ background: dark ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.94)', color: dark ? '#f8fafc' : '#0f172a' }}>
+      <div className="ia-glass-card rounded-xl p-6" style={{ background: dark ? 'rgba(2, 5, 12, 0.92)' : 'rgba(255, 255, 255, 0.94)', color: dark ? '#f8fafc' : '#0f172a' }}>
         <div
           ref={containerRef}
           className={`ia-prose ${isStreaming ? 'ia-streaming' : ''}`}
@@ -127,6 +122,29 @@ export default function ResumeView({ content, isStreaming, subject, avatarConfig
             </button>
           </div>
         )}
+         {!isStreaming && content && !showReader && voices.length > 0 && (
+            <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: `${T.accent}20`,
+              border: `2px solid ${T.accent}`,
+              color: T.accent,
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+            }}
+              onClick={handleStartReading}
+              className="ia-read-btn"
+            >
+              
+              <UserStar size={24} />
+            </button>
+          )}
       </div>
 
       {/* PIP Avatar Reader */}

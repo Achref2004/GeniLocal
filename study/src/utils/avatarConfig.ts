@@ -1,4 +1,6 @@
-const AVATAR_KEY = 'study_dicebear_config_detailed';
+import { API_BASE_URL, STORAGE_KEY_AVATAR } from '../config';
+
+const AVATAR_KEY = STORAGE_KEY_AVATAR;
 
 export const AVATAR_OPTIONS = {
   top: ['shortFlat', 'hat', 'hijab', 'turban', 'winterHat1', 'winterHat02', 'winterHat03', 'winterHat04', 'bob', 'bun', 'curly', 'curvy', 'dreads', 'frida', 'fro', 'froBand', 'longButNotTooLong', 'miaWallace', 'shavedSides', 'straight02', 'straight01', 'straightAndStrand', 'dreads01', 'dreads02', 'frizzle', 'shaggy', 'shaggyMullet', 'shortCurly', 'shortRound', 'shortWaved', 'sides', 'theCaesar', 'theCaesarAndSidePart', 'bigHair'],
@@ -59,7 +61,7 @@ export async function saveAvatarConfig(config: AvatarConfig): Promise<void> {
   try {
     const token = localStorage.getItem('token');
     if (!token) return;
-    await fetch('http://localhost:8000/api/avatar', {
+    await fetch(`${API_BASE_URL}/avatar`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -76,7 +78,7 @@ export async function loadAvatarConfig(): Promise<AvatarConfig> {
   try {
     const token = localStorage.getItem('token');
     if (!token) return getDefaultConfig();
-    const res = await fetch('http://localhost:8000/api/avatar', {
+    const res = await fetch(`${API_BASE_URL}/avatar`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.ok) {

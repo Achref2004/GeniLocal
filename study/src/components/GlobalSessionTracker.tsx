@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import axios from 'axios';
+import { BACKEND_URL } from '../config';
 
 /**
  * Global component that handles tracking user presence and session time seamlessly in the background.
@@ -25,7 +26,7 @@ const GlobalSessionTracker: React.FC = () => {
 
         // Send an initial handshake to update presence + sync early
         if (increment_presence > 0) {
-            axios.post('http://127.0.0.1:8000/api/progression', {
+            axios.post(`${BACKEND_URL}/api/progression`, {
                 increment_seconds: 0,
                 increment_presence: increment_presence
             }, {
@@ -37,7 +38,7 @@ const GlobalSessionTracker: React.FC = () => {
         saveTimer.current = setInterval(() => {
             const currentToken = localStorage.getItem('token');
             if (currentToken) {
-                axios.post('http://127.0.0.1:8000/api/progression', {
+                axios.post(`${BACKEND_URL}/api/progression`, {
                     increment_seconds: 5,
                     increment_presence: 0
                 }, {

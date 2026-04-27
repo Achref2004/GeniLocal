@@ -105,9 +105,6 @@ class IaHistoryCreate(BaseModel):
     input_text: str
     subject: Optional[str] = None
     result: str
-    question: Optional[str] = None
-    user_answer: Optional[str] = None
-    correction: Optional[str] = None
     meta_data: Optional[Dict[str, Any]] = None
 
 class IaHistoryOut(IaHistoryCreate):

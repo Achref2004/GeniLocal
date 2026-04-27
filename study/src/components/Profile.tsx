@@ -8,6 +8,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme, STARS, BIRDS } from '../reutilisable/Themecontext';
 import Sidebar, { UserProfile } from '../reutilisable/Sidebar';
+import { BACKEND_URL } from '../config';
 
 const Profile: React.FC = () => {
     const navigate = useNavigate();
@@ -29,7 +30,7 @@ const Profile: React.FC = () => {
 
     useEffect(() => {
         if (!token) { navigate('/login'); return; }
-        axios.get('http://127.0.0.1:8000/users/me', {
+        axios.get(`${BACKEND_URL}/users/me`, {
             headers: { Authorization: `Bearer ${token}` },
         }).then(res => {
             const d = res.data;
@@ -46,7 +47,7 @@ const Profile: React.FC = () => {
 
     useEffect(() => {
         if (!token) return;
-        axios.get('http://127.0.0.1:8000/users/me/stats', {
+        axios.get(`${BACKEND_URL}/users/me/stats`, {
             headers: { Authorization: `Bearer ${token}` },
         }).then(res => {
             setStats(res.data);
@@ -65,7 +66,7 @@ const Profile: React.FC = () => {
     const handleSave = async () => {
         setLoading(true); setError(''); setSaved(false);
         try {
-            const res = await axios.put('http://127.0.0.1:8000/users/me', formData, {
+            const res = await axios.put(`${BACKEND_URL}/users/me`, formData, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             const d = res.data;

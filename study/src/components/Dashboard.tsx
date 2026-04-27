@@ -12,6 +12,8 @@ import Footer from '../reutilisable/Footer';
 import { useTheme } from '../reutilisable/Themecontext'; // ← thème global
 import { loadHistory, type HistoryItem } from '../utils/api_ia';
 import { aggregateProgress, SubjectProgress } from '../utils/progressionStats';
+import { getImportedDocumentsCount } from '../utils/documentCounter';
+import { BACKEND_URL } from '../config';
 
 interface UserStats {
     total_study_seconds: number;
@@ -62,6 +64,7 @@ const Dashboard: React.FC = () => {
     const [progressData, setProgressData] = useState<SubjectProgress[]>([]);
     const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
     const [showBadges, setShowBadges] = useState(false);
+    const [importedDocsCount, setImportedDocsCount] = useState(() => getImportedDocumentsCount());
     const token = localStorage.getItem('token');
 
     const handleLogout = () => {
@@ -71,12 +74,12 @@ const Dashboard: React.FC = () => {
 
     useEffect(() => {
         if (!token) return;
-        axios.get('http://127.0.0.1:8000/users/me/stats', {
+        axios.get(`${BACKEND_URL}/users/me/stats`, {
             headers: { Authorization: `Bearer ${token}` },
         }).then(res => { if (res.data) setStats(prev => ({ ...prev, ...res.data })); })
             .catch(() => console.warn('Stats non disponibles.'));
 
-        axios.get('http://127.0.0.1:8000/users/me', {
+        axios.get(`${BACKEND_URL}/users/me`, {
             headers: { Authorization: `Bearer ${token}` },
         }).then(res => { if (res.data) setUser(res.data); })
             .catch(() => console.warn('Profil non disponible.'));
@@ -105,6 +108,18 @@ const Dashboard: React.FC = () => {
         loadProgressData();
         const interval = setInterval(loadProgressData, 30000); // Rafraîchir toutes les 30s
         return () => clearInterval(interval);
+    }, []);
+
+    // Synchroniser le compteur de documents importés (mises à jour cross-pages)
+    useEffect(() => {
+        const handleDocUpdate = (e: Event) => {
+            const detail = (e as CustomEvent<{ count: number }>).detail;
+            setImportedDocsCount(detail?.count ?? getImportedDocumentsCount());
+        };
+        // Lire la valeur actuelle au montage (au cas où une import a eu lieu avant)
+        setImportedDocsCount(getImportedDocumentsCount());
+        window.addEventListener('documents-imported-updated', handleDocUpdate);
+        return () => window.removeEventListener('documents-imported-updated', handleDocUpdate);
     }, []);
 
     // Calculer les statistiques globales de progression
@@ -187,7 +202,7 @@ const Dashboard: React.FC = () => {
                         { icon: <Clock size={26} />, accent: '#4f6ef7', label: "Heures d'étude", value: formatTime(stats.total_study_seconds), mono: true },
                         { icon: <TrendingUp size={26} />, accent: '#00b8d9', label: 'Jours de présence', value: String(stats.days_present) },
                         { icon: <Award size={26} />, accent: '#e91e94', label: 'Score QCM moyen', value: `${Math.round(stats.average_qcm_score)}%` },
-                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Documents analysés', value: String(stats.documents_analyzed) },
+                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Documents importés', value: String(importedDocsCount) },
                     ].map(({ icon, accent, label, value, mono }) => (
                         <div key={label} style={card({ padding: '24px 22px', position: 'relative', overflow: 'hidden', cursor: 'default' })}
                             onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}
@@ -220,7 +235,7 @@ const Dashboard: React.FC = () => {
                             (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
                         }}
                     >
-                        // Carte de progression
+                        {/* Carte de progression */}
                         <div style={{ position: 'absolute', top: -30, right: -30, width: 90, height: 90, background: '#8b5cf6', borderRadius: '50%', filter: 'blur(36px)', opacity: 0.35 }} />
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14, position: 'relative', zIndex: 1 }}>
                             <div style={{ width: 48, height: 48, background: '#8b5cf6', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: `0 8px 20px #8b5cf640` }}>

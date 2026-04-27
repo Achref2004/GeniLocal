@@ -7,6 +7,7 @@ import { Label } from './ui/label';
 import { BookOpen, AlertCircle, Loader2 } from 'lucide-react';
 import { jwtDecode } from 'jwt-decode';
 import api from '../api';
+import { BACKEND_URL } from '../config';
 import logoGeniLocal from '../assets/logoo_genilocal.png';
 import login_image from '../assets/login_image.png';
 
@@ -40,7 +41,7 @@ export function LoginPage() {
 
   // --- 2. CONNEXION VIA GOOGLE (Redirection) ---
   const handleGoogleLogin = () => {
-    window.location.href = "http://localhost:8000/login/google";
+    window.location.href = `${BACKEND_URL}/login/google`;
   };
 
   // --- 3. CONNEXION CLASSIQUE (Email/Password) ---
