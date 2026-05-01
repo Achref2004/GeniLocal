@@ -107,7 +107,12 @@ const Dashboard: React.FC = () => {
 
         loadProgressData();
         const interval = setInterval(loadProgressData, 30000); // Rafraîchir toutes les 30s
-        return () => clearInterval(interval);
+        
+        window.addEventListener('ia-history-updated', loadProgressData);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('ia-history-updated', loadProgressData);
+        };
     }, []);
 
     // Synchroniser le compteur de documents importés (mises à jour cross-pages)

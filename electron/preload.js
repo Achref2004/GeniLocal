@@ -1,8 +1,9 @@
 /**
  * Preload script - Exposes safe IPC APIs to renderer
+ * Uses CommonJS (require) instead of ES6 import for Electron compatibility
  */
 
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
 // Expose IPC API to frontend
 contextBridge.exposeInMainWorld('ipc', {

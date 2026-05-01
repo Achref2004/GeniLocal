@@ -101,10 +101,13 @@ class AvatarConfigSchema(BaseModel):
 
 # 8. IA History
 class IaHistoryCreate(BaseModel):
-    mode: str
-    input_text: str
+    mode: Optional[str] = "unknown"
+    input_text: Optional[str] = ""
     subject: Optional[str] = None
-    result: str
+    result: Optional[str] = ""
+    question: Optional[str] = None
+    user_answer: Optional[str] = None
+    correction: Optional[str] = None
     meta_data: Optional[Dict[str, Any]] = None
 
 class IaHistoryOut(IaHistoryCreate):

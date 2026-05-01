@@ -83,8 +83,9 @@ export default function RaisonnementPage() {
     reload();
     loadAvatarConfig().then(setAvatarConfig);
     
-    window.addEventListener('ia-history-updated', reload);
-    return () => window.removeEventListener('ia-history-updated', reload);
+    const handleHistoryUpdate = () => setTimeout(reload, 100);
+    window.addEventListener('ia-history-updated', handleHistoryUpdate);
+    return () => window.removeEventListener('ia-history-updated', handleHistoryUpdate);
   }, []);
   const [showAvatarCreator, setShowAvatarCreator] = useState(false);
 
@@ -193,8 +194,10 @@ export default function RaisonnementPage() {
     setText(item.text || '');
     if (item.subject) setSubject(item.subject);
 
-    // If the item has a result, display it directly without re-generating
-    if (item.result) {
+    // Check if item has a valid mode and result to display
+    // Important: Always display if mode is recognized (not just if result exists, as empty string is falsy)
+    const validModes = ['resume', 'qcm', 'qcm_remedial', 'qr', 'chat', 'qr_question'];
+    if (validModes.includes(item.mode) && (item.result !== undefined && item.result !== null)) {
       resetResults();
       if (item.mode === 'resume') {
         setActiveMode('resume');
@@ -205,10 +208,14 @@ export default function RaisonnementPage() {
       } else if (item.mode === 'qcm_remedial') {
         setActiveMode('qcm_remedial');
         setRawRemedialContent(item.result);
-      } else if (item.mode === 'qr') {
+      } else if (item.mode === 'qr' || item.mode === 'chat' || item.mode === 'qr_question') {
         setActiveMode('qr');
-        if (item.question) setQrQuestion(item.question);
-        if (item.correction) setQrCorrection(item.correction);
+        if (item.mode === 'qr_question') {
+          setQrQuestion(item.result || item.question || '');
+        } else {
+          if (item.question) setQrQuestion(item.question);
+          if (item.correction) setQrCorrection(item.correction);
+        }
       }
     }
   }, [resetResults]);

@@ -36,7 +36,9 @@ class IaHistory(Base):
     input_text = Column(Text, nullable=False)
     subject = Column(String(100), nullable=True, index=True)
     result = Column(Text, nullable=False)
-    # question, user_answer, correction removed as requested
+    question = Column(Text, nullable=True)
+    user_answer = Column(Text, nullable=True)
+    correction = Column(Text, nullable=True)
     meta_data = Column("metadata", JSON, nullable=True)  # tokens, time, model_version, etc
 
     __table_args__ = (

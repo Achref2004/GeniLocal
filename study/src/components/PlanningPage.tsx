@@ -42,7 +42,12 @@ export default function PlanningPage() {
   useEffect(() => {
     loadNotes().then(setNotes);
     loadEvents().then(setEvents);
-    loadIAHistory().then(setIaHistory);
+    
+    const reloadIAHistory = () => loadIAHistory().then(setIaHistory);
+    reloadIAHistory();
+    
+    window.addEventListener('ia-history-updated', reloadIAHistory);
+    return () => window.removeEventListener('ia-history-updated', reloadIAHistory);
   }, []);
 
   // UI State

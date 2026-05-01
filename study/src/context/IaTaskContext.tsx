@@ -146,14 +146,19 @@ export const IaTaskProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           });
           delete controllersRef.current[taskId];
 
-          // Save to history automatically
-          await saveToHistory({ 
-            mode, 
-            text: text.substring(0, 200), 
-            subject, 
-            result: fullText, 
-            question: existingQuestion 
-          });
+          // Save to history automatically (normalize QR modes).
+          // We persist one consolidated Q/R entry on correction completion.
+          if (mode !== 'qr_question') {
+            const historyMode = mode === 'qr_correct' ? 'qr' : mode;
+            await saveToHistory({
+              mode: historyMode,
+              text: text.substring(0, 200),
+              subject,
+              result: fullText,
+              question: existingQuestion,
+              correction: mode === 'qr_correct' ? fullText : undefined,
+            });
+          }
         },
         (err) => {
           setTasks(prev => {

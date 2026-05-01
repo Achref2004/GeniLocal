@@ -563,7 +563,7 @@ export async function loadHistory(): Promise<HistoryItem[]> {
         mode: item.mode,
         text: item.input_text || item.text || '',
         subject: item.subject || '',
-        result: item.result || '',
+        result: item.result !== undefined && item.result !== null ? item.result : '',
         question: item.question || '',
         userAnswer: item.user_answer || item.userAnswer || '',
         correction: item.correction || '',
@@ -578,8 +578,11 @@ export async function loadHistory(): Promise<HistoryItem[]> {
 export async function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>): Promise<HistoryItem[]> {
   try {
     const token = localStorage.getItem('token');
-    if (!token) return [];
-    await fetch(`${API_BASE}/history`, {
+    if (!token) {
+      console.warn('⚠️ No token found - history not saved');
+      return [];
+    }
+    const response = await fetch(`${API_BASE}/history`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -595,11 +598,25 @@ export async function saveToHistory(entry: Omit<HistoryItem, 'id' | 'timestamp'>
         correction: entry.correction,
       })
     });
-    window.dispatchEvent(new Event('ia-history-updated'));
+    
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('❌ Error saving history:', response.status, error);
+      return [];
+    }
+    
+    console.log('✅ History saved successfully:', entry.mode);
+    
+    // ⚠️ IMPORTANT: Wait for SQLite to commit (small delay for db transaction)
+    // Then dispatch event so listeners fetch fresh data
+    setTimeout(() => {
+      window.dispatchEvent(new Event('ia-history-updated'));
+    }, 300);
+    
   } catch (err) {
     console.error('❌ Error saving history to database:', err);
   }
-  return await loadHistory();
+  return [];  // Don't auto-load here; let the event listener handle it
 }
 
 export async function clearHistory(): Promise<HistoryItem[]> {
@@ -610,6 +627,7 @@ export async function clearHistory(): Promise<HistoryItem[]> {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      window.dispatchEvent(new Event('ia-history-updated'));
     }
   } catch (e) {
     console.warn("Error clearing history", e);

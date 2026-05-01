@@ -1238,11 +1238,25 @@ def get_ia_history(db: Session = Depends(get_sqlite_db), current_user: models.Us
 @app.post("/api/history", response_model=schemas.IaHistoryOut)
 def save_ia_history(history_in: schemas.IaHistoryCreate, db: Session = Depends(get_sqlite_db), current_user: models.User = Depends(get_current_user)):
     from sqlite_models import IaHistory
-    db_hist = IaHistory(user_id=current_user.id, **history_in.model_dump())
+    db_hist = IaHistory(
+        user_id=current_user.id,
+        mode=history_in.mode or "unknown",
+        input_text=history_in.input_text or "",
+        subject=history_in.subject,
+        result=history_in.result or "",
+        question=history_in.question,
+        user_answer=history_in.user_answer,
+        correction=history_in.correction,
+        meta_data=history_in.meta_data,
+    )
     db.add(db_hist)
     db.commit()
-    update_user_badges(db, current_user.id, history_in.mode)
     db.refresh(db_hist)
+    # Badge update must never block history persistence.
+    try:
+        update_user_badges(db, current_user.id, history_in.mode)
+    except Exception as e:
+        print(f"⚠️ Badge update error: {e}")
     return db_hist
 
 @app.delete("/api/history")

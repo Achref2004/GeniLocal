@@ -227,7 +227,18 @@ export async function getRaisonnementForDate(date: string): Promise<Raisonnement
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.ok) {
-        const history: RaisonnementHistoryItem[] = await res.json();
+        const rawHistory = await res.json();
+        const history: RaisonnementHistoryItem[] = (rawHistory || []).map((item: any) => ({
+          id: item.id,
+          timestamp: item.timestamp,
+          mode: item.mode === 'qr_correct' ? 'qr' : item.mode,
+          text: item.input_text || item.text || '',
+          subject: item.subject || '',
+          result: item.result || '',
+          question: item.question || '',
+          userAnswer: item.user_answer || item.userAnswer || '',
+          correction: item.correction || '',
+        }));
         return history.filter(item => {
           if (!item.timestamp) return false;
           const itemDate = new Date(item.timestamp).toISOString().split('T')[0];
@@ -308,7 +319,18 @@ export async function loadIAHistory(): Promise<RaisonnementHistoryItem[]> {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (res.ok) {
-        return await res.json();
+        const rawHistory = await res.json();
+        return (rawHistory || []).map((item: any) => ({
+          id: item.id,
+          timestamp: item.timestamp,
+          mode: item.mode === 'qr_correct' ? 'qr' : item.mode,
+          text: item.input_text || item.text || '',
+          subject: item.subject || '',
+          result: item.result || '',
+          question: item.question || '',
+          userAnswer: item.user_answer || item.userAnswer || '',
+          correction: item.correction || '',
+        }));
     }
   } catch {
   }

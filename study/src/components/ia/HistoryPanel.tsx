@@ -72,6 +72,11 @@ export default function HistoryPanel({ history, onSelect, onClear }: HistoryPane
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium text-sky-400">{getModeLabel(item.mode)}</span>
                     {item.subject && <span className="text-xs text-gray-500">• {item.subject}</span>}
+                    {item.result ? (
+                      <span className="text-xs px-1.5 py-0.5 bg-green-900/40 text-green-400 rounded">✓</span>
+                    ) : (
+                      <span className="text-xs px-1.5 py-0.5 bg-yellow-900/40 text-yellow-400 rounded">!</span>
+                    )}
                   </div>
                   <p className="text-xs text-gray-400 truncate mt-0.5">
                     {item.text?.substring(0, 60)}...
