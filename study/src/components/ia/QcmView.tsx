@@ -237,7 +237,7 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick, maxQ
           backdropFilter: 'blur(32px)',
         }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: 'bold', marginBottom: '8px', color: T.accent }}>
-            💡 Besoin d'aide ?
+             Besoin d'aide ?
           </h3>
           <p style={{ color: dark ? '#e2e8f0' : '#334155', marginBottom: '16px', fontSize: '0.875rem' }}>
             Vous avez des difficultés sur {wrongAnswers.questions.length} question{wrongAnswers.questions.length > 1 ? 's' : ''}.
@@ -266,7 +266,7 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick, maxQ
                 (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
               }}
             >
-              🎯 Générer des questions de rattrapage
+               Générer des questions de rattrapage
             </button>
             <button
               onClick={() => setShowRemedialOffer(false)}
@@ -286,8 +286,8 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick, maxQ
                 (e.currentTarget as HTMLButtonElement).style.color = '#3b82f6';
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(71, 85, 105, 0.5)';
-                (e.currentTarget as HTMLButtonElement).style.color = '#cbd5e1';
+                (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(253, 68, 229, 0.5)';
+                (e.currentTarget as HTMLButtonElement).style.color = '#f32ec2';
               }}
             >
               Passer
@@ -311,8 +311,8 @@ export default function QcmView({ rawContent, isStreaming, onRemedialClick, maxQ
             <span style={{ color: dark ? '#94a3b8' : '#64748b' }}>/{totalQuestions || maxQuestions}</span>
           </div>
           <p style={{ color: dark ? '#e2e8f0' : '#0f172a' }}>
-            {score === totalQuestions ? '🎉 Parfait ! Excellent travail !' :
-             score >= Math.ceil(totalQuestions * 0.6) ? '👏 Bien joué ! Continue comme ça !' :
+            {score === totalQuestions ? ' Parfait ! Excellent travail !' :
+             score >= Math.ceil(totalQuestions * 0.6) ? ' Bien joué ! Continue comme ça !' :
              '📖 Continue à réviser, tu vas y arriver !'}
           </p>
         </div>

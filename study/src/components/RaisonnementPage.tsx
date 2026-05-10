@@ -628,7 +628,7 @@ export default function RaisonnementPage() {
                       <h3 style={{ color: '#a855f7', fontWeight: 'bold', marginBottom: '8px' }}>
                         Questions de rattrapage adaptées
                       </h3>
-                      <p style={{ color: '#cbd5e1', fontSize: '0.875rem' }}>
+                      <p style={{ color: '#072b85', fontSize: '0.875rem' }}>
                         Ces questions vous aideront à mieux comprendre les sujets problématiques.
                       </p>
                     </div>

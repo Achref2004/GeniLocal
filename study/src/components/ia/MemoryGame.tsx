@@ -150,10 +150,10 @@ export default function MemoryGame({ isLoading }: MemoryGameProps) {
 
       {/* Game Title */}
       <div style={{ textAlign: 'center' }}>
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#e2e8f0', marginBottom: '8px' }}>
-          🎮 Memory Rapide!
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#ee3ab2', marginBottom: '8px' }}>
+          Memory Rapide!
         </h2>
-        <p style={{ fontSize: '0.875rem', color: '#94a3b8' }}>
+        <p style={{ fontSize: '0.875rem', color: '#ff0080' }}>
           Trouvez les paires pendant le chargement...
         </p>
       </div>
@@ -240,7 +240,7 @@ export default function MemoryGame({ isLoading }: MemoryGameProps) {
         fontWeight: '500',
         letterSpacing: '0.3px',
       }}>
-        {gameWon ? '✅ Génération terminée!' : 'Génération des questions QCM en cours...'}
+        {gameWon ? ' Génération en cours ' : 'Génération des questions QCM en cours...'}
       </p>
     </div>
   );

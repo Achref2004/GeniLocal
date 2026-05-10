@@ -226,71 +226,49 @@ L'étudiant commence par: "${user_answer}"
 
 Saluez-le chaleureusement et commencez une discussion naturelle. Répondez UNIQUEMENT en FRANÇAIS.`;
 
+// ... (reste du code identique jusqu'au case 'qr_correct')
 
     case 'qr_correct': {
-      const nicknames = ['mon ami', 'mon cher', 'sweety', 'mon petit', 'mon cher', '5ouya', 'mon chouchou', 'ma chère'];
+      const nicknames = ['mon ami', 'mon cher', 'mon grand', 'mon petit', 'mon cher', '5ouya', 'mon chouchou', 'ma chère'];
       const randomNick = nicknames[Math.floor(Math.random() * nicknames.length)];
-      const isFirstMessage = !conversationHistory || conversationHistory.trim().split('\n').filter(l => l.startsWith('Étudiant:') || l.startsWith('Student:') || l.startsWith('طالب:')).length <= 1;
+      
+      // On simplifie la détection du premier message pour éviter les répétitions lourdes
+      const hasHistory = conversationHistory && conversationHistory.trim().length > 10;
 
       if (lang === 'en') {
-        if (isFirstMessage) {
-          return `You are a kind, expert teacher. Say "Hello ${randomNick}!" and start a conversation about "${subject}".
-
-Be clear, friendly, and helpful. Answer ONLY in ENGLISH, and keep the tone natural.
-
-Student: ${user_answer}
-
-Your answer in ENGLISH:`;
-        }
-        return `You are a kind, expert teacher. Discuss the subject: "${subject}".
-
-Recent conversation:
-${conversationHistory}
-
-Student: ${user_answer}
-
-Answer ONLY in ENGLISH to this message:`;
+        return `You are a helpful and kind expert teacher. 
+                Context/Subject of study: "${subject}".
+                ${hasHistory ? `Conversation history:\n${conversationHistory}` : `This is the start of the conversation. You can greet the student with "Hello ${randomNick}!" if appropriate.`}
+                
+                Student's message: "${user_answer}"
+                
+                Instruction: Respond directly and naturally to the student in ENGLISH. Be pedagogical and encouraging.
+                Your answer in ENGLISH:`;
       }
 
       if (lang === 'ar') {
-        if (isFirstMessage) {
-          return `أنت معلم خبير وودود. قل "مرحباً ${randomNick}!" وابدأ حديثاً حول "${subject}".
-
-كن واضحاً، ودوداً، ومساعداً. أجب باللغة العربية فقط.
-
-الطالب: ${user_answer}
-
-إجابتك باللغة العربية:`;
-        }
-        return `أنت معلم خبير وودود. ناقش الموضوع: "${subject}".
-
-المحادثة الأخيرة:
-${conversationHistory}
-
-الطالب: ${user_answer}
-
-أجب باللغة العربية فقط على هذه الرسالة:`;
+        return `أنت معلم خبير وودود. 
+                سياق الموضوع: "${subject}".
+                ${hasHistory ? `سجل المحادثة:\n${conversationHistory}` : `هذه بداية المحادثة. يمكنك الترحيب بالطالب بـ "مرحباً ${randomNick}!" إذا كان ذلك مناسباً.`}
+                
+                رسالة الطالب: "${user_answer}"
+                
+                تعليمات: رد مباشرة وبشكل طبيعي على الطالب باللغة العربية فقط. كن واضحاً ومفيداً.
+                إجابتك باللغة العربية:`;
       }
 
-      if (isFirstMessage) {
-        return `Tu es un professeur expert et bienveillant. Dis "Bonjour ${randomNick}!" et commence à discuter du sujet : "${subject}".
-
-Sois clair, amical et pédagogique. Réponds UNIQUEMENT en FRANÇAIS.
-
-Étudiant : ${user_answer}
-
-Ta réponse EN FRANÇAIS :`;
-      }
-
-      return `Tu es un professeur expert et bienveillant. Discute du sujet : "${subject}".
-
-Historique récent :
-${conversationHistory}
-
-Étudiant : ${user_answer}
-
-Réponds UNIQUEMENT en FRANÇAIS à ce message :`;
+      // Default: French
+      return `Tu es un professeur expert et bienveillant. 
+              Sujet d'étude : "${subject}".
+              ${hasHistory ? `Historique de la conversation :\n${conversationHistory}` : `C'est le début de la conversation. Tu peux saluer l'étudiant avec "Bonjour ${randomNick} !" si c'est approprié.`}
+              
+              Message de l'étudiant : "${user_answer}"
+              
+              Instruction : Réponds directement et naturellement à l'étudiant en FRANÇAIS. Sois clair, amical et pédagogique.
+              Ta réponse EN FRANÇAIS :`;
     }
+
+// ... (reste du code identique)
 
 
     default:

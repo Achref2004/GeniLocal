@@ -774,10 +774,10 @@ def build_ia_prompt(
 async def stream_ollama_response(prompt: str, is_json: bool = False):
     """Stream from Ollama without caching (for chat, Q/R correction, etc.)."""
     payload = {
-        "model": OLLAMA_MODEL,
-        "prompt": prompt,
-        "stream": True,
-        "options": {"temperature": 0.7, "num_predict": 2048, "top_k": 40, "top_p": 0.9, "num_ctx": 4096}
+    "model": OLLAMA_MODEL,
+    "prompt": prompt,
+    "stream": True,
+    "options": {"temperature": 0.4, "num_predict": 1200, "top_k": 20, "top_p": 0.9, "num_ctx": 3000, "num_thread": 3}
     }
     if is_json:
         payload["format"] = "json"
@@ -938,10 +938,6 @@ async def ia_health():
 # MODULE OCR — Upload & Parse Schedule into Calendar Events
 # ══════════════════════════════════════════════════════════════
 
-# Add the parent folder (project root) to path so we can import ocr_hybrid
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
 
 @app.post("/api/ocr/schedule")
 async def ocr_schedule(file: UploadFile = File(...)):

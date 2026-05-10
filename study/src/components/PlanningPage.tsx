@@ -292,10 +292,10 @@ export default function PlanningPage() {
           setOcrResult('Erreur: Aucun élément détecté dans le document.');
         }
       } else {
-        setOcrResult('Erreur: Le serveur OCR n\'est pas disponible. Vérifiez que le backend tourne.');
+        setOcrResult('Erreur: Le serveur  n\'est pas disponible. Vérifiez que le backend tourne.');
       }
     } catch {
-      setOcrResult('Erreur: Impossible de contacter le serveur OCR. Vérifiez que le backend est lancé sur le port 8000.');
+      setOcrResult('Erreur: Impossible de contacter le serveur . Vérifiez que le backend est lancé sur le port 8000.');
     } finally {
       setIsUploading(false);
     }
@@ -815,7 +815,7 @@ export default function PlanningPage() {
                     Glissez ou cliquez pour importer
                   </p>
                   <p style={{ fontSize: '0.65rem', color: T.textMuted }}>
-                    PDF, Image, DOCX — OCR automatique
+                    PDF, Image, DOCX 
                   </p>
                 </div>
 
@@ -833,7 +833,7 @@ export default function PlanningPage() {
                       }} />
                     </div>
                     <p style={{ fontSize: '0.65rem', color: T.textMuted, marginTop: 4 }}>
-                      Analyse OCR en cours... {Math.round(uploadProgress)}%
+                      Analyse en cours... {Math.round(uploadProgress)}%
                     </p>
                   </div>
                 )}
@@ -1369,7 +1369,7 @@ export default function PlanningPage() {
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: T.text, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <FileText size={20} color={T.accent} />
-                  Résultat de l'extraction OCR
+                  Résultat d'extraction
                 </h3>
                 <p style={{ fontSize: '0.7rem', color: T.textMuted, margin: '4px 0 0' }}>
                   {ocrItems.length} élément(s) détecté(s) — Vérifiez et assignez les dates manquantes
