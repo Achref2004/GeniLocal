@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useTheme } from '../reutilisable/Themecontext';
 import {
   Calendar, ChevronLeft, ChevronRight, Home, Plus, X, Upload, FileText,
@@ -17,7 +18,7 @@ import {
   getDaysInMonth, getFirstDayOfMonth, MONTH_NAMES, DAY_NAMES,
 } from '../utils/planningStorage';
 import './planning-styles.css';
-import { incrementImportedDocuments } from '../utils/documentCounter';
+import { BACKEND_URL } from '../config';
 
 // ═══════════════════════════════════════════════════════════
 //  PLANNING PAGE — Main Component
@@ -84,6 +85,9 @@ export default function PlanningPage() {
 
   // ─── Calendar Navigation ────────────────────────────────
 
+  // 🇹🇳 goNextMonth: tbaddel el calendrier lel shahr eli jey —
+  // tbaddel l'animation (slide lel yser) w tza3za3 el shahr b +1
+  // ken el shahr ken 11 (Décembre), terja3 lel 0 (Janvier) w tzid el sna
   const goNextMonth = useCallback(() => {
     setSlideDir('left');
     setSlideKey(k => k + 1);
@@ -95,6 +99,9 @@ export default function PlanningPage() {
     }
   }, [currentMonth]);
 
+  // 🇹🇳 goPrevMonth: terja3 lel shahr eli fat —
+  // nafs el 7keya mel goNextMonth laken lel yimin
+  // ken el shahr ken 0 (Janvier), terja3 l 11 (Décembre) w tn9es el sna
   const goPrevMonth = useCallback(() => {
     setSlideDir('right');
     setSlideKey(k => k + 1);
@@ -123,6 +130,10 @@ export default function PlanningPage() {
 
   // ─── Calendar Data ──────────────────────────────────────
 
+  // 🇹🇳 calendarDays: tahseb kol el ayam el wajouda fel grille el calendrier —
+  // el grille fihom 42 case (6 rows x 7 cols)
+  // tzemm ayam el shahr el fat (bech el grille ma tabdash farghha)
+  // w ayam el shahr el jey fel a5er bel nafs el sabab
   const calendarDays = useMemo(() => {
     const daysInMonth = getDaysInMonth(currentYear, currentMonth);
     const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
@@ -165,6 +176,10 @@ export default function PlanningPage() {
     return cells;
   }, [currentMonth, currentYear]);
 
+  // 🇹🇳 getDotsForDate: tjib el lowen (dots) el wajouda f youm m3ayyan —
+  // kol dot twarri categorie nshath (etude, repos, sport...)
+  // tchouf fel notes, events, w historique el IA
+  // bech el user ychouf f wejha el calendrier ayam fihom nshath
   const getDotsForDate = useCallback((dateKey: string): EventCategory[] => {
     const dayNotes = notes.filter(n => n.date === dateKey);
     const dayEvents = events.filter(e => e.date === dateKey);
@@ -185,6 +200,9 @@ export default function PlanningPage() {
 
   // ─── Note Editor ────────────────────────────────────────
 
+  // 🇹🇳 resetNoteEditor: tmassi kol el champs mta3 el editeur mta3 notes —
+  // ki el user ysallem note wela y7abbat el editeur
+  // terja3 kol el valeurs lel defaults (khawya) w ta5bi el editeur
   const resetNoteEditor = useCallback(() => {
     setNoteType('libre');
     setNoteTitle('');
@@ -194,6 +212,11 @@ export default function PlanningPage() {
     setShowNoteEditor(false);
   }, []);
 
+  // 🇹🇳 handleSaveNote: tsajjel el note mta3 el user —
+  // ki el user yekteb el title w ya3mel save, had el fonction:
+  // - tsajjel el note fel localStorage (via planningStorage)
+  // - thadeth lista el notes fel state
+  // - tresettel el editeur (ta7liha)
   const handleSaveNote = useCallback(async () => {
     if (!noteTitle.trim() || !selectedDate) return;
     const updated = await saveNote({
@@ -209,11 +232,17 @@ export default function PlanningPage() {
     resetNoteEditor();
   }, [selectedDate, noteType, noteTitle, noteContent, noteSubject, noteCategory, resetNoteEditor]);
 
+  // 🇹🇳 handleDeleteNote: tahthef note b id mta3ha —
+  // ki el user ya3mel click 3al bouton supprimer
+  // el note tetmassi mel localStorage w el liste teth7eth
   const handleDeleteNote = useCallback(async (id: string) => {
     const updated = await deleteNote(id);
     setNotes(updated);
   }, []);
 
+  // 🇹🇳 handleToggleChecked: tbaddel 7al el checkbox mta3 note —
+  // ki el user ya3mel tick 3al objectif (note type 'objectif')
+  // el checked yebda true, w el barre statistiques teth7eth
   const handleToggleChecked = useCallback(async (id: string) => {
     const updated = await toggleNoteChecked(id);
     setNotes(updated);
@@ -221,6 +250,11 @@ export default function PlanningPage() {
 
   // ─── File Upload (OCR) ──────────────────────────────────
 
+  // 🇹🇳 handleFileUpload: ki el user ychargi fichier emploi du temps —
+  // yba3th el fichier (PDF/image) lel backend (OCR endpoint /api/ocr/schedule)
+  // el backend ya9rah w yrajja3 lista mta3 events (drous, examens...)
+  // b dates w heures mosta5raja automatiquement
+  // ki el extraction twalli, twarri modal OCR Review
   const handleFileUpload = useCallback(async (file: File) => {
     setIsUploading(true);
     setUploadProgress(0);
@@ -303,6 +337,9 @@ export default function PlanningPage() {
 
   // ─── OCR Review: update item date ────────────────────────
 
+  // 🇹🇳 updateOcrItemDate / Title / Subject: tbaddel valeur item mosta5raj —
+  // ki el user yabba ysa77a7 el date wela el 3onwan wela el matiere
+  // mta3 event mosta5raj mel OCR 9bal ma ydibou fel calendrier
   const updateOcrItemDate = useCallback((id: string, newDate: string) => {
     setOcrItems(prev => prev.map(item =>
       item.id === id ? { ...item, date: newDate, hasDate: !!newDate } : item
@@ -321,10 +358,16 @@ export default function PlanningPage() {
     ));
   }, []);
 
+  // 🇹🇳 removeOcrItem: ta7thef item wa7ed mel lista OCR —
+  // ki el user ma yabbich ydibbou fel calendrier, yqaddar y7ath
   const removeOcrItem = useCallback((id: string) => {
     setOcrItems(prev => prev.filter(item => item.id !== id));
   }, []);
 
+  // 🇹🇳 confirmOcrImport: tdib kol el events el mosta5raja fel calendrier —
+  // traja3 bass el items eli 3andhom date sa7i7a (YYYY-MM-DD)
+  // kol item yetdib ka note type 'devoir' b source 'ocr'
+  // w tha9qe9 el counter mta3 documents f el dashboard
   const confirmOcrImport = useCallback(async () => {
     // Only import items that have a valid date
     const validItems = ocrItems.filter(item => item.date && /^\d{4}-\d{2}-\d{2}$/.test(item.date));
@@ -348,9 +391,24 @@ export default function PlanningPage() {
     setShowOcrReview(false);
     setOcrItems([]);
     setOcrResult(`Succès: ${validItems.length} cours importé(s) dans le calendrier !`);
-    // Incrémenter le compteur global de documents importés (1 par fichier, pas par élément extrait)
+    // Mise à jour du compteur de documents importés côté backend
     if (validItems.length > 0) {
-      incrementImportedDocuments(1);
+      const token = localStorage.getItem('token');
+      if (token) {
+        axios.post(`${BACKEND_URL}/api/progression`, {
+          increment_seconds: 0,
+          increment_presence: 0,
+          increment_documents_analyzed: 1,
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((resp) => {
+          if (resp.data?.documents_analyzed != null) {
+            window.dispatchEvent(new CustomEvent('documents-imported-updated', { detail: { count: resp.data.documents_analyzed } }));
+          }
+        }).catch(() => {
+          console.warn('Impossible de mettre à jour le compteur de documents importés.');
+        });
+      }
     }
   }, [ocrItems, notes]);
 
@@ -360,6 +418,8 @@ export default function PlanningPage() {
 
   const ocrItemsWithDates = useMemo(() => ocrItems.filter(i => i.date && /^\d{4}-\d{2}-\d{2}$/.test(i.date)).length, [ocrItems]);
 
+  // 🇹🇳 handleDrop: ki el user y drag w drop fichier 3al zone upload —
+  // yakhod el fichier el waqqe3 w yrussalou lel handleFileUpload
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
@@ -404,6 +464,8 @@ export default function PlanningPage() {
 
   // ─── Format helpers ─────────────────────────────────────
 
+  // 🇹🇳 formatSelectedDate: thawwel el date men format YYYY-MM-DD —
+  // l format w3er besh el user yfahmou (ex: "Lundi 5 Mai 2025")
   const formatSelectedDate = (dateStr: string) => {
     const d = new Date(dateStr + 'T00:00:00');
     const dayNum = d.getDate();
@@ -413,6 +475,9 @@ export default function PlanningPage() {
     return `${dayNames[d.getDay()]} ${dayNum} ${monthName} ${year}`;
   };
 
+  // 🇹🇳 getModeIcon / getModeLabel: traja3 emoji w label lel mode mta3 el IA —
+  // hetha besh el planning page ywarri naw3 el nshath IA
+  // (resume=📖, QCM=🧠, Q/R=❓) fil calendrier w panel el youm
   const getModeIcon = (mode: string) => {
     switch (mode) {
       case 'resume': return '📖';
@@ -437,6 +502,9 @@ export default function PlanningPage() {
 
   // ─── Note Type Icons ────────────────────────────────────
 
+  // 🇹🇳 NoteTypeIcon: componente twarri icon bel naw3 mta3 el note —
+  // kol naw3 (resume, question, quiz, objectif, devoir, libre)
+  // 3andou icon moukhassas bech el user yfahem type el note mel wejha
   const NoteTypeIcon = ({ type, size = 18 }: { type: NoteType; size?: number }) => {
     switch (type) {
       case 'resume': return <BookOpen size={size} />;

@@ -1,0 +1,15 @@
+# pyrefly.toml — Configuration de l'analyseur statique Pyrefly
+# Indique la racine du projet pour que Pyrefly trouve les modules locaux.
+
+[python]
+# Chemin racine du projet (relatif à ce fichier)
+python_path = ["."]
+
+[import_discovery]
+# Modules locaux à ne pas signaler comme introuvables
+include_paths = ["."]
+
+[errors]
+# Ces modules sont locaux au projet et résolus à l'exécution
+# On les supprime des avertissements "Cannot find module"
+ignore_missing_imports = true

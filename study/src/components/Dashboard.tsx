@@ -12,7 +12,6 @@ import Footer from '../reutilisable/Footer';
 import { useTheme } from '../reutilisable/Themecontext'; // ← thème global
 import { loadHistory, type HistoryItem } from '../utils/api_ia';
 import { aggregateProgress, SubjectProgress } from '../utils/progressionStats';
-import { getImportedDocumentsCount } from '../utils/documentCounter';
 import { BACKEND_URL } from '../config';
 
 interface UserStats {
@@ -64,14 +63,20 @@ const Dashboard: React.FC = () => {
     const [progressData, setProgressData] = useState<SubjectProgress[]>([]);
     const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
     const [showBadges, setShowBadges] = useState(false);
-    const [importedDocsCount, setImportedDocsCount] = useState(() => getImportedDocumentsCount());
     const token = localStorage.getItem('token');
 
+    // 🇹🇳 handleLogout: ki el user yabi yo5roj mel application —
+    // tmaHi el token mel localStorage (el mafteH eli yakhel el user yed5ol)
+    // w trodou lel page dial login
     const handleLogout = () => {
         localStorage.removeItem('token');
         navigate('/login');
     };
 
+    // 🇹🇳 useEffect (jib el stats w profil): ki el page tefteH —
+    // njibou statistiques el user (waqt el derasah, QCM score...)
+    // w njibou informations profil mta3ou (isem, soura...)
+    // mel serveur (backend) bil token mta3 el user
     useEffect(() => {
         if (!token) return;
         axios.get(`${BACKEND_URL}/users/me/stats`, {
@@ -85,6 +90,9 @@ const Dashboard: React.FC = () => {
             .catch(() => console.warn('Profil non disponible.'));
     }, [token]);
 
+    // 🇹🇳 useEffect (timer): had el fonction bcha3 ki el chronométre —
+    // kolثانية (1000ms) tzid 1 lel waqt el derasah
+    // hekka el user ychouf waqtou el kol el 3adad yethadeth
     useEffect(() => {
         const interval = setInterval(() => {
             setStats(prev => ({ ...prev, total_study_seconds: (prev.total_study_seconds || 0) + 1 }));
@@ -115,19 +123,25 @@ const Dashboard: React.FC = () => {
         };
     }, []);
 
-    // Synchroniser le compteur de documents importés (mises à jour cross-pages)
+    // 🇹🇳 useEffect (documents importés): tsama3 lel event
+    // 'documents-imported-updated' — ki el user y5ali document OCR,
+    // had el event ytela3 w el 3adad dial documents mportés yethadeth
+    // fel dashboard automatiquement bla ma y3awad ychargi el page
     useEffect(() => {
         const handleDocUpdate = (e: Event) => {
             const detail = (e as CustomEvent<{ count: number }>).detail;
-            setImportedDocsCount(detail?.count ?? getImportedDocumentsCount());
+            if (detail?.count != null) {
+                setStats(prev => ({ ...prev, documents_analyzed: detail.count }));
+            }
         };
-        // Lire la valeur actuelle au montage (au cas où une import a eu lieu avant)
-        setImportedDocsCount(getImportedDocumentsCount());
         window.addEventListener('documents-imported-updated', handleDocUpdate);
         return () => window.removeEventListener('documents-imported-updated', handleDocUpdate);
     }, []);
 
     // Calculer les statistiques globales de progression
+    // 🇹🇳 globalProgression: tahseb el 3adad el kol dial el matieres
+    // eli el user starsem fihom (ki "Math", "Physique"...)
+    // useMemo: ma tahsebhach mel jedid ki ma tbaddlech el progressData
     const globalProgression = useMemo(() => {
         return {
             totalSubjects: progressData.length,
@@ -136,15 +150,39 @@ const Dashboard: React.FC = () => {
 //i-jiw mel serveur k-enhom "Klem" (String) maktoub hakka
 
 //jSON.parse: Hadhi t-rod el "Klem" hadhika l-"Lista" (Array) shiha bech najmou n-warriwhom ka3ba ka3ba. Ken famma ghalta fi el klem, yrajja3 lista fergha []
+    // 🇹🇳 badgeList: tHawwel el badges (el medals mta3 el user) —
+    // el badges tji mel serveur ka "Klem" (string JSON)
+    // had el fonction tfarashom w troddhom ka lista (array)
+    // hetha bech nwarriwhom fel interface wajeh b wajeh
+    // ken famma ghalta fil JSON, traja3 lista khawya []
     const badgeList = useMemo(() => {
-        try {
-            const list = JSON.parse(stats.badges || '[]');
-            return Array.isArray(list) ? list : [];
-        } catch {
+        if (!stats.badges) {
             return [];
         }
+
+        if (Array.isArray(stats.badges)) {
+            return stats.badges.map(String);
+        }
+
+        if (typeof stats.badges === 'string') {
+            try {
+                const parsed = JSON.parse(stats.badges);
+                if (Array.isArray(parsed)) {
+                    return parsed.map(String);
+                }
+                return [String(parsed)];
+            } catch {
+                return [stats.badges];
+            }
+        }
+
+        return [];
     }, [stats.badges]);
 // Calculer l'activité hebdomadaire à partir de l'historique
+    //  weeklyActivity: tahseb el nshath mta3 el user lel jom3a el kedhya —
+    // tchouf chwiya marra stakhdem el user el IA kol youm (Lun, Mar...)
+    // w tHawwel el 3adad lel sa3at bech twarri el graphique (BarChart)
+    // ken ma3endouch historique, traja3 el graphique b 0 fi kol youm
     const weeklyActivity = useMemo(() => {
         const now = new Date();
         const rawDays = Array.from({ length: 7 }, (_, index) => {
@@ -171,18 +209,29 @@ const Dashboard: React.FC = () => {
             hours: Math.max(0, Math.round((totalHours * (day.count / totalCount)) * 10) / 10),
         }));
     }, [historyData, stats.total_study_seconds]);
-// Formatage du temps d'étude en HH:MM:SS
+
+    // 🇹🇳 formatTime: thawwel el secondes l format HH:MM:SS —
+    // ex: 3661 secondes → "01:01:01"
+    // hetha li yettwarri fel carte "Heures d'étude" besh el user ychouf waqtou
     const formatTime = (s: number) => {
         const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
         return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
     };
 
+    // 🇹🇳 card: fonction helper (msa3da) —
+    // traja3 el styles el bases mta3 kol carte (background, border, radius)
+    // hetha besh ma nkararouch el CSS fi kol marra
+    // el 'extra' ychallik tzid styles ziyadiya 3liha
     const card = (extra: React.CSSProperties = {}): React.CSSProperties => ({
         background: T.card, border: `1px solid ${T.border}`,
         borderRadius: 28, color: T.textOnCard,
         transition: 'transform .25s, box-shadow .25s', ...extra,
     });
 
+    // 🇹🇳 renderContent: el fonction el asasiya li twarri el mohtawa —
+    // ken el tab el active meshi 'resume', twarri message "En construction"
+    // ken el tab huwa 'resume', twarri kol el cartes:
+    // stats, graphique el nshath, badges, w features
     const renderContent = () => {
         if (activeTab !== 'resume') {
             const icons: Record<string, React.ReactNode> = {
@@ -207,7 +256,7 @@ const Dashboard: React.FC = () => {
                         { icon: <Clock size={26} />, accent: '#4f6ef7', label: "Heures d'étude", value: formatTime(stats.total_study_seconds), mono: true },
                         { icon: <TrendingUp size={26} />, accent: '#00b8d9', label: 'Jours de présence', value: String(stats.days_present) },
                         { icon: <Award size={26} />, accent: '#e91e94', label: 'Score QCM moyen', value: `${Math.round(stats.average_qcm_score)}%` },
-                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Documents importés', value: String(importedDocsCount) },
+                        { icon: <BookOpen size={26} />, accent: '#6e40f7', label: 'Documents importés', value: String(stats.documents_analyzed || 0) },
                     ].map(({ icon, accent, label, value, mono }) => (
                         <div key={label} style={card({ padding: '24px 22px', position: 'relative', overflow: 'hidden', cursor: 'default' })}
                             onMouseEnter={e => (e.currentTarget.style.transform = 'translateY(-4px)')}

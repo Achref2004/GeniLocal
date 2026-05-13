@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { useTheme } from '../reutilisable/Themecontext';
 import ResumeView from './ia/ResumeView';
 import QcmView from './ia/QcmView';
@@ -23,7 +24,7 @@ import {
 } from '../utils/avatarConfig';
 import { Plus, Paperclip, Home, FileText, CheckSquare2, HelpCircle, TrendingUp, Upload, Loader, Eye, EyeOff, X, Check } from 'lucide-react';
 import { useIaTaskContext } from '../context/IaTaskContext';
-import { incrementImportedDocuments } from '../utils/documentCounter';
+import { BACKEND_URL } from '../config';
 
 // SVG Icons for action cards
 const ResumeIcon = () => (
@@ -103,11 +104,14 @@ export default function RaisonnementPage() {
   const [ocrError, setOcrError] = useState('');
 
   // Extraire les matières uniques de l'historique
+  //  existingSubjects: tjib lista el matieres el mawjouda fel historique —bech el user ynjm ykhtar matiere el 3andi deja(ma ychtihouch yekteb el isem merra okhra)
   const existingSubjects = useMemo(() => {
     const subjects = Array.from(new Set(history.map(item => item.subject).filter((s): s is string => Boolean(s))));
     return subjects;
   }, [history]);
 
+  //  cancelStream: toqqef kol el tasks el IA eli t5eddem —ki el user y7eb y7abbass, had el fonction tsofar lel kol el tasks
+  // w trettelha3 fi ta7iya wa7da (resume, qcm, qr, qcm_remedial)
   const cancelStream = useCallback(() => {
     Object.values(activeTaskIds).forEach(tid => {
         if (tid) cancelGlobalTask(tid);
@@ -118,6 +122,9 @@ export default function RaisonnementPage() {
     setIsStreamingCorrection(false);
   }, [activeTaskIds, cancelGlobalTask]);
 
+  //  resetResults: tmassi kol el natayej el k7la —
+  // ki el user yabda session jedida, thezz kol el mohtawa
+  // (resume, QCM, Q/R, rattrapage) w toqqef el streams
   const resetResults = useCallback(() => {
     cancelStream();
     setStreamContent('');
@@ -127,12 +134,15 @@ export default function RaisonnementPage() {
     setQrCorrection('');
   }, [cancelStream]);
 
+  // handleResume: ki el user ynzel 3al bouton "Résumé" —
+  // tekked el text meshi fara8, w twarri el dialog bech yekteb el matiere
   const handleResume = useCallback(() => {
     if (!text.trim()) return;
     setPendingAction('resume');
     setShowSubjectPrompt(true);
   }, [text]);
 
+  //  confirmResume: ki el user yekteb el matiere w ya3mel confirm —tla7i el dialog, tbadda task el resume fil IA, w thezz el natija el IA yebda ykteb el resume bit bit (streaming)
   const confirmResume = useCallback(() => {
     if (!subject.trim()) return;
     setShowSubjectPrompt(false);
@@ -143,6 +153,9 @@ export default function RaisonnementPage() {
     setActiveTaskIds(prev => ({ ...prev, resume: tid }));
   }, [text, subject, resetResults, startStreamTask]);
 
+  //  handleQcm / confirmQcm: nafs el 7keya mel Resume —
+  // laken had el marra el IA ya3ml  QCM (as2ila b 7alayet)
+  // el user yaghtar, ychouf sh7a7 wela ghalet
   const handleQcm = useCallback(() => {
     if (!text.trim()) return;
     setPendingAction('qcm');
@@ -159,6 +172,8 @@ export default function RaisonnementPage() {
     setActiveTaskIds(prev => ({ ...prev, qcm: tid }));
   }, [text, subject, resetResults, startStreamTask]);
 
+  //  handleQr / confirmQr: mode Q/R (su2al w jawaab) —
+  // el IA tawlad su2al 3al text eli kteb el user el user yjaaweb w el IA tsahhi9 el jawaab
   const handleQr = useCallback(() => {
     if (!text.trim()) return;
     setPendingAction('qr');
@@ -175,11 +190,16 @@ export default function RaisonnementPage() {
     setActiveTaskIds(prev => ({ ...prev, qr_question: tid }));
   }, [text, subject, resetResults, startStreamTask]);
 
+  //  handleQrAnswer: ki el user ykteb jawaabou 3al su2al —
+  // el IA ta5ou el jawaab w tsahhi9ou w twarri el correction
   const handleQrAnswer = useCallback((userAnswer: string) => {
     const tid = startStreamTask('qr_correct', text, subject, detectLanguage(text), qrQuestion);
     setActiveTaskIds(prev => ({ ...prev, qr_correct: tid }));
   }, [text, subject, qrQuestion, startStreamTask]);
 
+  //  handleRemediaq: ki el user ghalat f as2ila fel QCM —
+  // tjib el as2ila el ghalat, w tablassou lel IA besh tawlad QCM rattrapage
+  // "rattrapage" = as2ila mokhassassa lel noqat el dha3ifa mta3 el user
   const handleRemediaq = useCallback((wrongQuestions: any[], wrongIndexes: number[]) => {
     const topics = wrongQuestions
       .map((q, idx) => `${idx + 1}. ${q.question}`)
@@ -190,6 +210,10 @@ export default function RaisonnementPage() {
     setActiveTaskIds(prev => ({ ...prev, qcm_remedial: tid }));
   }, [text, subject, startStreamTask]);
 
+  //  handleHistorySelect: ki el user ya3mel click 3al historique —
+  // yrajja3 el text w el matiere mta3 el session el 9adima
+  // w ywarri el natija (resume, QCM, Q/R) eli kanet waqtha
+  // hetha besh el user yqaddar y7fath el session deja mawjouda
   const handleHistorySelect = useCallback(async (item: HistoryItem) => {
     setText(item.text || '');
     if (item.subject) setSubject(item.subject);
@@ -220,11 +244,16 @@ export default function RaisonnementPage() {
     }
   }, [resetResults]);
 
+  //  handleClearHistory: tamHi kol el historique mta3 el user —
+  // el historique ytemHa mel localStorage w el liste tetfargha
   const handleClearHistory = useCallback(async () => {
     const updated = await clearHistory();
     setHistory(updated);
   }, []);
 
+  //  handleAvatarSave: ki el user ybaddel avatar mta3ou —
+  // tsajjel el config el jedida (couleur, forme...)
+  // w ta7fal el avatar fel localStorage bech yeb9a m7afadh
   const handleAvatarSave = useCallback(async (newConfig: AvatarConfig) => {
     setAvatarConfig(newConfig);
     await saveAvatarConfig(newConfig);
@@ -235,6 +264,11 @@ export default function RaisonnementPage() {
 
   // ─── File Upload Handler ──────────────────────────────
 
+  //  handleFileAttach: ki el user ynzell ala import fichier (PDF, image...) —
+  // tabath el fichier lel backend (OCR endpoint)
+  // el backend yahwel el soura / PDF l nass (text)
+  // w twarri progress bar bech el user ychouf el 7al
+  // ki el extraction twalli, twarri modal besh el user yrajja3 el nass
   const handleFileAttach = useCallback(async (file: File) => {
     setIsExtractingFile(true);
     setExtractProgress(0);
@@ -283,6 +317,8 @@ export default function RaisonnementPage() {
     }
   }, []);
 
+  //  handleFileInputChange: ki el user ya5tar fichier mel input  ti3mel trigger lel handleFileAttach w treset el input
+  // besh el user yqaddar ychargi nafs el fichier merra okhra ken y7b
   const handleFileInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) handleFileAttach(file);
@@ -290,11 +326,29 @@ export default function RaisonnementPage() {
     e.target.value = '';
   }, [handleFileAttach]);
 
+  //  confirmOcrText: ki el user ya9bel el nass el mosta5raj —
+  // ydib el nass fel textarea besh el user yqaddar yastakhdemou mel IA
+  // w yza3za3 el event besh el counter dial documents yethadeth
+  // f el dashboard (msa3da lel statistiques)
   const confirmOcrText = useCallback(() => {
     setText(ocrCleanedText);
     setShowOcrReview(false);
-    // Incrémenter le compteur global de documents importés
-    incrementImportedDocuments(1);
+    const token = localStorage.getItem('token');
+    if (token) {
+      axios.post(`${BACKEND_URL}/api/progression`, {
+        increment_seconds: 0,
+        increment_presence: 0,
+        increment_documents_analyzed: 1,
+      }, {
+        headers: { Authorization: `Bearer ${token}` },
+      }).then((resp) => {
+        if (resp.data?.documents_analyzed != null) {
+          window.dispatchEvent(new CustomEvent('documents-imported-updated', { detail: { count: resp.data.documents_analyzed } }));
+        }
+      }).catch(() => {
+        console.warn('Impossible de mettre à jour le compteur de documents importés.');
+      });
+    }
   }, [ocrCleanedText]);
 
   return (
@@ -611,6 +665,7 @@ export default function RaisonnementPage() {
                     rawContent={rawQcmContent}
                     isStreaming={isStreaming}
                     onRemedialClick={handleRemediaq}
+                    
                   />
                 </div>
               )}
@@ -650,6 +705,7 @@ export default function RaisonnementPage() {
                     correctionContent={qrCorrection}
                     isStreamingCorrection={isStreamingCorrection}
                     onSubmitAnswer={handleQrAnswer}
+                    
                   />
                 </div>
               )}

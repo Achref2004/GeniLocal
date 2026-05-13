@@ -1,0 +1,12 @@
+{
+  "include": ["**/*.py"],
+  "exclude": ["__pycache__", "*.db", ".env"],
+  "pythonVersion": "3.10",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "venvPath": ".",
+  "extraPaths": ["."]
+}

@@ -51,12 +51,26 @@ const Profile: React.FC = () => {
             headers: { Authorization: `Bearer ${token}` },
         }).then(res => {
             setStats(res.data);
-            try {
-                const parsed = JSON.parse(res.data.badges || '[]');
-                setBadgeList(Array.isArray(parsed) ? parsed.map(String) : [String(parsed)]);
-            } catch (_e) {
-                setBadgeList(res.data.badges ? [res.data.badges] : []);
-            }
+
+            const parseBadges = (rawBadges: any) => {
+                if (!rawBadges) {
+                    return [];
+                }
+                if (Array.isArray(rawBadges)) {
+                    return rawBadges.map(String);
+                }
+                if (typeof rawBadges === 'string') {
+                    try {
+                        const parsed = JSON.parse(rawBadges);
+                        return Array.isArray(parsed) ? parsed.map(String) : [String(parsed)];
+                    } catch {
+                        return [rawBadges];
+                    }
+                }
+                return [];
+            };
+
+            setBadgeList(parseBadges(res.data.badges));
         }).catch(() => {
             setStats(null);
             setBadgeList([]);
@@ -330,10 +344,34 @@ const Profile: React.FC = () => {
                                             icon: <Timer size={20} />, color: '#ef4444',
                                         },
                                         {
-                                            title: 'QCM Parfait',
+                                            title: 'QCM Master',
                                             description: 'Obtenez un score de 100% sur un QCM.',
-                                            unlocked: badgeList.includes('QCM Parfait'),
+                                            unlocked: badgeList.includes('QCM Master'),
                                             icon: <Target size={20} />, color: '#10b981',
+                                        },
+                                        {
+                                            title: 'Conversation Active',
+                                            description: 'Répondez à 5 questions Q/R avec l\'IA.',
+                                            unlocked: badgeList.includes('Conversation Active'),
+                                            icon: <Globe size={20} />, color: '#14b8a6',
+                                        },
+                                        {
+                                            title: 'Résumeur Expert',
+                                            description: 'Générez 10 résumés avec l\'IA.',
+                                            unlocked: badgeList.includes('Résumeur Expert'),
+                                            icon: <PenTool size={20} />, color: '#a855f7',
+                                        },
+                                        {
+                                            title: '1h d\'étude',
+                                            description: 'Cumulez plus d\'1 heure d\'étude sur la plateforme.',
+                                            unlocked: badgeList.includes("1h d'étude"),
+                                            icon: <Timer size={20} />, color: '#ef4444',
+                                        },
+                                        {
+                                            title: 'Présence 1 semaine',
+                                            description: 'Connectez-vous 7 jours consécutifs.',
+                                            unlocked: badgeList.includes('Présence 1 semaine'),
+                                            icon: <Flame size={20} />, color: '#dc2626',
                                         },
                                         {
                                             title: 'Importateur OCR',
@@ -372,12 +410,6 @@ const Profile: React.FC = () => {
                                             icon: <Trophy size={20} />, color: '#eab308',
                                         },
                                         {
-                                            title: 'Résumeur Expert',
-                                            description: 'Générez 10 résumés avec l\'IA.',
-                                            unlocked: badgeList.includes('Résumeur Expert'),
-                                            icon: <PenTool size={20} />, color: '#a855f7',
-                                        },
-                                        {
                                             title: 'Curieux',
                                             description: 'Posez 15 questions à l\'IA.',
                                             unlocked: badgeList.includes('Curieux'),
@@ -394,9 +426,10 @@ const Profile: React.FC = () => {
                                             description: 'Débloquez 10 badges pour devenir Champion !',
                                             unlocked: badgeList.filter(b => [
                                                 'Premier utilisation', '+5 matières ajoutées', 'Explorateur IA',
-                                                'Marathonien', 'QCM Parfait', 'Importateur OCR', 'Organisateur',
+                                                'Marathonien', 'QCM Master', 'Conversation Active', 'Résumeur Expert',
+                                                '1h d\'étude', 'Présence 1 semaine', 'Importateur OCR', 'Organisateur',
                                                 'Noctambule', 'Polyglotte', 'Série de 7 jours', 'Maître QCM',
-                                                'Résumeur Expert', 'Curieux', 'Perfectionniste'
+                                                'Curieux', 'Perfectionniste'
                                             ].includes(b)).length >= 10,
                                             icon: <Crown size={20} />, color: '#d97706',
                                         },

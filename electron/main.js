@@ -187,7 +187,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      sandbox: true,
+      sandbox: false,
     },
     icon: path.join(__dirname, 'logoo_genilocal.png'),
   });

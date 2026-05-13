@@ -33,7 +33,7 @@ interface SidebarProps {
 }
 
 const NAV_ITEMS = [
-    { id: 'resume', icon: <Home size={22} />, title: 'Résumé', subtitle: 'Aperçu & suivi', route: null },
+    { id: 'resume', icon: <Home size={22} />, title: 'Tableau de bord', subtitle: 'Aperçu & suivi', route: null },
     { id: 'raisonnement', icon: <Brain size={22} />, title: 'Raisonnement', subtitle: 'IA & étude', route: '/raisonnement' },
     { id: 'profil', icon: <User size={22} />, title: 'Profil', subtitle: 'Vos paramètres', route: '/profile' },
     { id: 'planning', icon: <Calendar size={22} />, title: 'Planning', subtitle: 'Organisation', route: '/planning' },

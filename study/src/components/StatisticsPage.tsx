@@ -28,6 +28,10 @@ export function StatisticsPage() {
     fetchData();
   }, []);
 
+  // 🇹🇳 fetchData: had el fonction tji3b el data kol mel serveur —
+  // tjib lista el users w el statistiques (3adad users, reghione, jami3a)
+  // bil token mta3 admin (besh yettakked el user admin)
+  // ken famma ghalta fel token, truddou lel page /admin automatiquement
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -46,11 +50,17 @@ export function StatisticsPage() {
   };
 
   // Préparer les données pour les graphiques
+  // 🇹🇳 regionData: thawwel el object mta3 el reghiones —
+  // mel format {Tunis: 5, Sfax: 3} l lista [{name:"Tunis",count:5}...]
+  // had el format huwa eli yfahmouh el graphiques (BarChart, PieChart)
   const regionData = Object.entries(stats.by_region).map(([region, count]) => ({
     name: region,
     count: count as number
   }));
 
+  // 🇹🇳 institutionData: nafs el 7keya mal regionData —
+  // laken had el marra bel jami3at (institutions)
+  // thawwelhom l lista bech el graphiques yqadrou ywarriwom
   const institutionData = Object.entries(stats.by_institution).map(([institution, count]) => ({
     name: institution,
     count: count as number
